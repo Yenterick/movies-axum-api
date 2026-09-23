@@ -94,3 +94,72 @@ pub struct Movie {
     pub crew: Vec<CrewMember>,
     pub director: Option<String>,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct MovieUpdate {
+    pub budget: Option<u64>,
+    pub homepage: Option<String>,
+    pub original_language: Option<String>,
+    pub original_title: Option<String>,
+    pub overview: Option<String>,
+    pub popularity: Option<f32>,
+    pub release_date: Option<NaiveDate>,
+    pub revenue: Option<u64>,
+    pub runtime: Option<u32>,
+    pub status: Option<MovieStatus>,
+    pub tagline: Option<String>,
+    pub title: Option<String>,
+    pub vote_average: Option<f32>,
+    pub vote_count: Option<u32>,
+    pub director: Option<String>,
+}
+
+impl MovieUpdate {
+    pub fn apply_to(self, movie: &mut Movie) {
+        if let Some(budget) = self.budget {
+            movie.budget = budget;
+        }
+        if let Some(homepage) = self.homepage {
+            movie.homepage = Some(homepage);
+        }
+        if let Some(original_language) = self.original_language {
+            movie.original_language = original_language;
+        }
+        if let Some(original_title) = self.original_title {
+            movie.original_title = original_title;
+        }
+        if let Some(overview) = self.overview {
+            movie.overview = Some(overview);
+        }
+        if let Some(popularity) = self.popularity {
+            movie.popularity = popularity;
+        }
+        if let Some(release_date) = self.release_date {
+            movie.release_date = Some(release_date);
+        }
+        if let Some(revenue) = self.revenue {
+            movie.revenue = revenue;
+        }
+        if let Some(runtime) = self.runtime {
+            movie.runtime = Some(runtime);
+        }
+        if let Some(status) = self.status {
+            movie.status = status;
+        }
+        if let Some(tagline) = self.tagline {
+            movie.tagline = Some(tagline);
+        }
+        if let Some(title) = self.title {
+            movie.title = title;
+        }
+        if let Some(vote_average) = self.vote_average {
+            movie.vote_average = vote_average;
+        }
+        if let Some(vote_count) = self.vote_count {
+            movie.vote_count = vote_count;
+        }
+        if let Some(director) = self.director {
+            movie.director = Some(director);
+        }
+    }
+}

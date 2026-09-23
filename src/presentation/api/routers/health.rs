@@ -7,7 +7,15 @@ pub fn router() -> Router<AppState> {
     Router::new().route("/", get(health))
 }
 
-async fn health() -> impl IntoResponse {
+#[utoipa::path(
+    get,
+    path = "/api/v1/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "The API is up and running")
+    )
+)]
+pub(crate) async fn health() -> impl IntoResponse {
     let body: Value = json!({
         "success": true,
         "message": "Movies API is up and running!"
