@@ -1,14 +1,18 @@
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::sync::RwLock;
 
-pub async fn initialize_database() -> PgPool {
-    let _ = dotenv::dotenv();
+use async_trait::async_trait;
 
-    let db_url: String =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable must be set!");
+use crate::domain::{entities::movie::Movie, repositories::movie_repository::MovieRepository};
 
-    PgPoolOptions::new()
-        .max_connections(10)
-        .connect(&db_url)
-        .await
-        .expect("Failed to connect to PostgreSQL")
+pub struct PostgresMovieRepository {
+    movies: RwLock<Vec<Movie>>,
+}
+
+#[async_trait]
+impl MovieRepository for PostgresMovieRepository {
+    async fn find_all(&self) -> Vec<Movie> {
+        
+    }
+
+    async fn find_by_id(&self, )
 }

@@ -2,6 +2,7 @@ mod application;
 mod domain;
 mod infrastructure;
 mod presentation;
+mod scripts;
 
 use crate::presentation::api::app;
 
