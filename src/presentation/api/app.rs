@@ -5,7 +5,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::application::services::movie_service::MovieService;
-use crate::infrastructure::repositories::csv_movie_repository::CsvMovieRepository;
+use crate::infrastructure::csv::repositories::csv_movie_repository::CsvMovieRepository;
 use crate::presentation::api::openapi::ApiDoc;
 use crate::presentation::api::routers::{health, movies};
 use crate::presentation::api::state::AppState;

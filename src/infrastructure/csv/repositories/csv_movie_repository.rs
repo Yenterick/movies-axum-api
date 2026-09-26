@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 use crate::domain::entities::movie::{CrewMember, Gender, Genre, Movie, MovieStatus, MovieUpdate};
 use crate::domain::errors::MovieError;
 use crate::domain::repositories::movie_repository::MovieRepository;
-use crate::infrastructure::repositories::csv_parser;
+use crate::infrastructure::csv::csv_parser;
 
 pub struct CsvMovieRepository {
     movies: RwLock<Vec<Movie>>,
