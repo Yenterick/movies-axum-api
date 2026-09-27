@@ -1,9 +1,10 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MovieError {
     NotFound(u32),
     AlreadyExists(u32),
+    RepositoryError(String),
 }
 
 impl fmt::Display for MovieError {
@@ -11,6 +12,7 @@ impl fmt::Display for MovieError {
         match self {
             MovieError::NotFound(id) => write!(f, "movie with id {id} not found"),
             MovieError::AlreadyExists(id) => write!(f, "movie with id {id} already exists"),
+            MovieError::RepositoryError(message) => write!(f, "repository error: {message}"),
         }
     }
 }

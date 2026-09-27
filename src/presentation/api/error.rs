@@ -10,6 +10,7 @@ impl IntoResponse for MovieError {
         let status = match self {
             MovieError::NotFound(_) => StatusCode::NOT_FOUND,
             MovieError::AlreadyExists(_) => StatusCode::CONFLICT,
+            MovieError::RepositoryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (

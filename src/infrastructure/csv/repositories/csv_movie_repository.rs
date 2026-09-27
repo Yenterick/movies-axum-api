@@ -44,17 +44,29 @@ impl CsvMovieRepository {
 
 #[async_trait]
 impl MovieRepository for CsvMovieRepository {
-    async fn find_all(&self) -> Vec<Movie> {
-        self.movies.read().await.clone()
+    async fn find_all(&self) -> Result<Vec<Movie>, MovieError> {
+        Ok(self.movies.read().await.clone())
     }
 
-    async fn find_by_id(&self, id: u32) -> Option<Movie> {
+    async fn find_paginated(&self, limit: usize, offset: usize) -> Vec<Movie> {
         self.movies
             .read()
             .await
             .iter()
-            .find(|movie| movie.id == id)
+            .skip(offset)
+            .take(limit)
             .cloned()
+            .collect()
+    }
+
+    async fn find_by_id(&self, id: u32) -> Result<Option<Movie>, MovieError> {
+        Ok(self
+            .movies
+            .read()
+            .await
+            .iter()
+            .find(|movie| movie.id == id)
+            .cloned())
     }
 
     async fn create(&self, movie: Movie) -> Result<Movie, MovieError> {

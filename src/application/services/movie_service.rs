@@ -18,11 +18,9 @@ impl MovieService {
 
     pub async fn get_all(&self, query: MovieListQuery) -> Vec<MovieResponse> {
         self.repository
-            .find_all()
+            .find_paginated(query.limit, query.offset)
             .await
             .into_iter()
-            .skip(query.offset)
-            .take(query.limit)
             .map(Into::into)
             .collect()
     }
@@ -30,7 +28,7 @@ impl MovieService {
     pub async fn get_by_id(&self, id: u32) -> Result<MovieResponse, MovieError> {
         self.repository
             .find_by_id(id)
-            .await
+            .await?
             .ok_or(MovieError::NotFound(id))
             .map(Into::into)
     }
