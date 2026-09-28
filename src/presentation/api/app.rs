@@ -5,13 +5,16 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::application::services::movie_service::MovieService;
-use crate::infrastructure::csv::repositories::csv_movie_repository::CsvMovieRepository;
+use crate::infrastructure::postgres::postgres;
+use crate::infrastructure::postgres::repositories::postgres_movie_repository::PostgresMovieRepository;
 use crate::presentation::api::openapi::ApiDoc;
 use crate::presentation::api::routers::{health, movies};
 use crate::presentation::api::state::AppState;
 
 pub async fn run() -> Router {
-    let movie_repository = CsvMovieRepository::from_csv_file("db/movies.csv");
+    let pool = postgres::initialize_database().await;
+
+    let movie_repository = PostgresMovieRepository::new(pool);
     let movie_service = Arc::new(MovieService::new(Arc::new(movie_repository)));
     let state = AppState { movie_service };
 

@@ -136,7 +136,10 @@ impl PostgresMovieRepository {
         .await
         .map_err(db_error)?
         {
-            cast_by_movie.entry(row.movie_id).or_default().push(row.name);
+            cast_by_movie
+                .entry(row.movie_id)
+                .or_default()
+                .push(row.name);
         }
 
         let mut crew_by_movie: HashMap<i64, Vec<CrewMember>> = HashMap::new();
@@ -238,16 +241,275 @@ impl MovieRepository for PostgresMovieRepository {
         }
     }
 
-    async fn create(&self, _movie: Movie) -> Result<Movie, MovieError> {
-        unimplemented!("PostgresMovieRepository::create is not implemented yet")
+    async fn create(&self, movie: Movie) -> Result<Movie, MovieError> {
+        let mut tx = self.pool.begin().await.map_err(db_error)?;
+
+        let sql = format!(
+            "INSERT INTO movies ({MOVIE_COLUMNS}) \
+             VALUES (COALESCE(NULLIF($1, 0), (SELECT COALESCE(MAX(id), 0) + 1 FROM movies)), \
+                     $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) \
+             RETURNING {MOVIE_COLUMNS}"
+        );
+
+        let row = sqlx::query_as::<_, MovieRow>(sqlx::AssertSqlSafe(sql))
+            .bind(movie.id as i64)
+            .bind(movie.index as i64)
+            .bind(movie.budget as i64)
+            .bind(&movie.homepage)
+            .bind(&movie.original_language)
+            .bind(&movie.original_title)
+            .bind(&movie.overview)
+            .bind(movie.popularity as f64)
+            .bind(movie.release_date)
+            .bind(movie.revenue as i64)
+            .bind(movie.runtime.map(|value| value as f64))
+            .bind(status_to_str(movie.status))
+            .bind(&movie.tagline)
+            .bind(&movie.title)
+            .bind(movie.vote_average as f64)
+            .bind(movie.vote_count as i64)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+        let movie_id = row.id;
+
+        for genre in &movie.genres {
+            let genre_id = sqlx::query_scalar::<_, i32>(
+                "INSERT INTO genres (name) VALUES ($1) \
+                 ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name \
+                 RETURNING id",
+            )
+            .bind(genre_to_str(*genre))
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            sqlx::query(
+                "INSERT INTO movie_genres (movie_id, genre_id) VALUES ($1, $2) \
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(movie_id)
+            .bind(genre_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+
+        for keyword in &movie.keywords {
+            let keyword_id = sqlx::query_scalar::<_, i32>(
+                "INSERT INTO keywords (name) VALUES ($1) \
+                 ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name \
+                 RETURNING id",
+            )
+            .bind(keyword)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            sqlx::query(
+                "INSERT INTO movie_keywords (movie_id, keyword_id) VALUES ($1, $2) \
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(movie_id)
+            .bind(keyword_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+
+        for production_company in &movie.production_companies {
+            sqlx::query(
+                "INSERT INTO production_companies (id, name) VALUES ($1, $2) \
+                 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+            )
+            .bind(production_company.id as i64)
+            .bind(&production_company.name)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            sqlx::query(
+                "INSERT INTO movie_production_companies (movie_id, company_id) VALUES ($1, $2) \
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(movie_id)
+            .bind(production_company.id as i64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+
+        for production_country in &movie.production_countries {
+            sqlx::query(
+                "INSERT INTO production_countries (iso_3166_1, name) VALUES ($1, $2) \
+                 ON CONFLICT (iso_3166_1) DO UPDATE SET name = EXCLUDED.name",
+            )
+            .bind(&production_country.iso_3166_1)
+            .bind(&production_country.name)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            sqlx::query(
+                "INSERT INTO movie_production_countries (movie_id, country_iso) VALUES ($1, $2) \
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(movie_id)
+            .bind(&production_country.iso_3166_1)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+
+        for spoken_language in &movie.spoken_languages {
+            sqlx::query(
+                "INSERT INTO spoken_languages (iso_639_1, name) VALUES ($1, $2) \
+                 ON CONFLICT (iso_639_1) DO UPDATE SET name = EXCLUDED.name",
+            )
+            .bind(&spoken_language.iso_639_1)
+            .bind(&spoken_language.name)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            sqlx::query(
+                "INSERT INTO movie_spoken_languages (movie_id, language_iso) VALUES ($1, $2) \
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(movie_id)
+            .bind(&spoken_language.iso_639_1)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+
+        for cast_member in &movie.cast {
+            let person_id =
+                sqlx::query_scalar::<_, i64>("SELECT id FROM people WHERE name = $1 LIMIT 1")
+                    .bind(cast_member)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(db_error)?;
+
+            if let Some(person_id) = person_id {
+                sqlx::query(
+                    "INSERT INTO movie_cast (movie_id, person_id) VALUES ($1, $2) \
+                     ON CONFLICT DO NOTHING",
+                )
+                .bind(movie_id)
+                .bind(person_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_error)?;
+            }
+        }
+
+        for crew_member in &movie.crew {
+            sqlx::query(
+                "INSERT INTO people (id, name, gender) VALUES ($1, $2, $3) \
+                 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, gender = EXCLUDED.gender",
+            )
+            .bind(crew_member.id as i64)
+            .bind(&crew_member.name)
+            .bind(gender_to_i32(crew_member.gender))
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            sqlx::query(
+                "INSERT INTO movie_crew (credit_id, movie_id, person_id, department, job) \
+                 VALUES ($1, $2, $3, $4, $5) \
+                 ON CONFLICT (credit_id) DO UPDATE SET \
+                    movie_id = EXCLUDED.movie_id, person_id = EXCLUDED.person_id, \
+                    department = EXCLUDED.department, job = EXCLUDED.job",
+            )
+            .bind(&crew_member.credit_id)
+            .bind(movie_id)
+            .bind(crew_member.id as i64)
+            .bind(&crew_member.department)
+            .bind(&crew_member.job)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
+
+        tx.commit().await.map_err(db_error)?;
+
+        Ok(assemble_movie(
+            row,
+            movie.genres,
+            movie.keywords,
+            movie.production_companies,
+            movie.production_countries,
+            movie.spoken_languages,
+            movie.cast,
+            movie.crew,
+            movie.director,
+        ))
     }
 
-    async fn update(&self, _id: u32, _update: MovieUpdate) -> Result<Movie, MovieError> {
-        unimplemented!("PostgresMovieRepository::update is not implemented yet")
+    async fn update(&self, id: u32, update: MovieUpdate) -> Result<Movie, MovieError> {
+        let sql = format!(
+            "UPDATE movies SET \
+                budget = COALESCE($2, budget), \
+                homepage = COALESCE($3, homepage), \
+                original_language = COALESCE($4, original_language), \
+                original_title = COALESCE($5, original_title), \
+                overview = COALESCE($6, overview), \
+                popularity = COALESCE($7, popularity), \
+                release_date = COALESCE($8, release_date), \
+                revenue = COALESCE($9, revenue), \
+                runtime = COALESCE($10, runtime), \
+                status = COALESCE($11, status), \
+                tagline = COALESCE($12, tagline), \
+                title = COALESCE($13, title), \
+                vote_average = COALESCE($14, vote_average), \
+                vote_count = COALESCE($15, vote_count) \
+             WHERE id = $1 \
+             RETURNING {MOVIE_COLUMNS}"
+        );
+
+        let row = sqlx::query_as::<_, MovieRow>(sqlx::AssertSqlSafe(sql))
+            .bind(id as i64)
+            .bind(update.budget.map(|value| value as i64))
+            .bind(update.homepage)
+            .bind(update.original_language)
+            .bind(update.original_title)
+            .bind(update.overview)
+            .bind(update.popularity.map(|value| value as f64))
+            .bind(update.release_date)
+            .bind(update.revenue.map(|value| value as i64))
+            .bind(update.runtime.map(|value| value as f64))
+            .bind(update.status.map(status_to_str))
+            .bind(update.tagline)
+            .bind(update.title)
+            .bind(update.vote_average.map(|value| value as f64))
+            .bind(update.vote_count.map(|value| value as i64))
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db_error)?
+            .ok_or(MovieError::NotFound(id))?;
+
+        self.hydrate(vec![row])
+            .await?
+            .into_iter()
+            .next()
+            .ok_or(MovieError::NotFound(id))
     }
 
-    async fn delete(&self, _id: u32) -> Result<(), MovieError> {
-        unimplemented!("PostgresMovieRepository::delete is not implemented yet")
+    async fn delete(&self, id: u32) -> Result<(), MovieError> {
+        let result = sqlx::query("DELETE FROM movies WHERE id = $1")
+            .bind(id as i64)
+            .execute(&self.pool)
+            .await
+            .map_err(db_error)?;
+
+        if result.rows_affected() == 0 {
+            return Err(MovieError::NotFound(id));
+        }
+
+        Ok(())
     }
 }
 
@@ -396,6 +658,47 @@ fn parse_status(raw: &str) -> MovieStatus {
         "Released" => MovieStatus::Released,
         "Rumored" => MovieStatus::Rumored,
         _ => MovieStatus::PostProduction,
+    }
+}
+
+fn genre_to_str(genre: Genre) -> &'static str {
+    match genre {
+        Genre::Action => "Action",
+        Genre::Adventure => "Adventure",
+        Genre::Animation => "Animation",
+        Genre::Comedy => "Comedy",
+        Genre::Crime => "Crime",
+        Genre::Documentary => "Documentary",
+        Genre::Drama => "Drama",
+        Genre::Family => "Family",
+        Genre::Fantasy => "Fantasy",
+        Genre::Foreign => "Foreign",
+        Genre::History => "History",
+        Genre::Horror => "Horror",
+        Genre::Music => "Music",
+        Genre::Mystery => "Mystery",
+        Genre::Romance => "Romance",
+        Genre::ScienceFiction => "Science Fiction",
+        Genre::Thriller => "Thriller",
+        Genre::TvMovie => "TV Movie",
+        Genre::War => "War",
+        Genre::Western => "Western",
+    }
+}
+
+fn gender_to_i32(gender: Gender) -> i32 {
+    match gender {
+        Gender::Unspecified => 0,
+        Gender::Female => 1,
+        Gender::Male => 2,
+    }
+}
+
+fn status_to_str(status: MovieStatus) -> &'static str {
+    match status {
+        MovieStatus::Released => "Released",
+        MovieStatus::Rumored => "Rumored",
+        MovieStatus::PostProduction => "Post Production",
     }
 }
 
