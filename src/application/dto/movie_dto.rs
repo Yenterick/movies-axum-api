@@ -217,7 +217,7 @@ impl From<CrewMemberRequest> for CrewMember {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct MovieCreateRequest {
-    pub id: u32,
+    pub id: Option<u32>,
     pub budget: u64,
     pub genres: Vec<GenreRequest>,
     pub homepage: Option<String>,
@@ -249,7 +249,7 @@ impl From<MovieCreateRequest> for Movie {
             budget: request.budget,
             genres: request.genres.into_iter().map(Into::into).collect(),
             homepage: request.homepage,
-            id: request.id,
+            id: request.id.unwrap_or(0),
             keywords: request.keywords,
             original_language: request.original_language,
             original_title: request.original_title,
