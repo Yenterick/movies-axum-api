@@ -1,4 +1,6 @@
+use utoipa::Modify;
 use utoipa::OpenApi;
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 
 use crate::application::dto::movie_dto::{
     CountryRequest, CountryResponse, CrewMemberRequest, CrewMemberResponse, GenderRequest,
@@ -17,7 +19,7 @@ use crate::presentation::api::routers::{health, movies, users};
         movies::get_all,
         movies::create,
         movies::get_by_id,
-        movies::patch,
+        movies::update,
         movies::delete,
         users::login,
         users::register,
@@ -48,6 +50,25 @@ use crate::presentation::api::routers::{health, movies, users};
         (name = "users", description = "Users authentication operations"),
         (name = "movies", description = "Movie catalogue operations"),
         (name = "health", description = "Service health checks")
-    )
+    ),
+    modifiers(&SecurityAddon)
 )]
 pub struct ApiDoc;
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                SecurityScheme::Http(
+                    HttpBuilder::new()
+                        .scheme(HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            );
+        }
+    }
+}

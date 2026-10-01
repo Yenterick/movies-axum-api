@@ -5,6 +5,7 @@ use crate::application::services::hash_service::HashService;
 use crate::domain::entities::user::User;
 use crate::domain::errors::UserError;
 use crate::domain::repositories::user_repository::UserRepository;
+use crate::infrastructure::auth::jwt::create_token;
 
 #[derive(Clone)]
 pub struct UserService {
@@ -34,10 +35,13 @@ impl UserService {
             return Err(UserError::NotFound(request.username));
         }
 
+        let token = create_token(&user.id.unwrap_or_default().to_string())
+            .map_err(|error| UserError::RepositoryError(error.to_string()))?;
+
         Ok(UserResponse {
             id: user.id,
             username: user.username,
-            token: None,
+            token: Some(token),
         })
     }
 
@@ -60,10 +64,14 @@ impl UserService {
             password_hash,
         };
 
-        self.repository.create(user).await.map(|user| UserResponse {
+        let user = self.repository.create(user).await?;
+        let token = create_token(&user.id.unwrap_or_default().to_string())
+            .map_err(|error| UserError::RepositoryError(error.to_string()))?;
+
+        Ok(UserResponse {
             id: user.id,
             username: user.username,
-            token: None,
+            token: Some(token),
         })
     }
 }

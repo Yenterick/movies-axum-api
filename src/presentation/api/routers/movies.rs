@@ -1,18 +1,26 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::middleware;
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 
 use crate::application::dto::movie_dto::{
     MovieCreateRequest, MovieListQuery, MoviePatchRequest, MovieResponse,
 };
+use crate::infrastructure::auth::middleware::jwt_auth;
 use crate::presentation::api::state::AppState;
 
 pub fn router() -> Router<AppState> {
+    let protected = Router::new()
+        .route("/", post(create))
+        .route("/{id}", patch(update).delete(delete))
+        .route_layer(middleware::from_fn(jwt_auth));
+
     Router::new()
-        .route("/", get(get_all).post(create))
-        .route("/{id}", get(get_by_id).patch(patch).delete(delete))
+        .route("/", get(get_all))
+        .route("/{id}", get(get_by_id))
+        .merge(protected)
 }
 
 #[utoipa::path(
@@ -36,9 +44,11 @@ pub(crate) async fn get_all(
     path = "/api/v1/movies",
     tag = "movies",
     request_body = MovieCreateRequest,
+    security(("bearer_auth" = [])),
     responses(
         (status = 201, description = "The movie was created", body = MovieResponse),
-        (status = 409, description = "A movie with the given id already exists")
+        (status = 409, description = "A movie with the given id already exists"),
+        (status = 401, description = "Unauthorized, invalid or expired token")
     )
 )]
 pub(crate) async fn create(
@@ -75,12 +85,14 @@ pub(crate) async fn get_by_id(
     tag = "movies",
     params(("id" = u32, Path, description = "Movie id")),
     request_body = MoviePatchRequest,
+    security(("bearer_auth" = [])),
     responses(
         (status = 200, description = "The movie was updated", body = MovieResponse),
-        (status = 404, description = "No movie exists with the given id")
+        (status = 404, description = "No movie exists with the given id"),
+        (status = 401, description = "Unauthorized, invalid or expired token")
     )
 )]
-pub(crate) async fn patch(
+pub(crate) async fn update(
     State(state): State<AppState>,
     Path(id): Path<u32>,
     Json(request): Json<MoviePatchRequest>,
@@ -93,9 +105,11 @@ pub(crate) async fn patch(
     path = "/api/v1/movies/{id}",
     tag = "movies",
     params(("id" = u32, Path, description = "Movie id")),
+    security(("bearer_auth" = [])),
     responses(
         (status = 200, description = "The movie was deleted"),
-        (status = 404, description = "No movie exists with the given id")
+        (status = 404, description = "No movie exists with the given id"),
+        (status = 401, description = "Unauthorized, invalid or expired token")
     )
 )]
 pub(crate) async fn delete(

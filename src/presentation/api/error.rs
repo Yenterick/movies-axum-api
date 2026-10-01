@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
-use crate::domain::errors::{MovieError, UserError};
+use crate::domain::errors::{AuthError, MovieError, UserError};
 
 impl IntoResponse for MovieError {
     fn into_response(self) -> Response {
@@ -15,6 +15,16 @@ impl IntoResponse for MovieError {
 
         (
             status,
+            Json(json!({ "success": false, "message": self.to_string() })),
+        )
+            .into_response()
+    }
+}
+
+impl IntoResponse for AuthError {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::UNAUTHORIZED,
             Json(json!({ "success": false, "message": self.to_string() })),
         )
             .into_response()
