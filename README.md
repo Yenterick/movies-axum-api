@@ -20,12 +20,7 @@
 
 ## Requirements
 
-- **Rust** 1.85+ (2024 edition)
-- **Docker** + **Docker Compose** (to run PostgreSQL)
-- [`sqlx-cli`](https://github.com/launchbadge/sqlx/tree/main/sqlx-cli) to run migrations:
-  ```bash
-  cargo install sqlx-cli --no-default-features --features postgres
-  ```
+- **Docker** + **Docker Compose**
 
 ## Getting Started
 
@@ -33,21 +28,13 @@
    ```bash
    cp .env.example .env
    ```
-2. Start PostgreSQL:
+2. Start PostgreSQL and the API (migrations run automatically on startup):
    ```bash
-   docker compose up -d
+   docker compose up --build
    ```
-3. Run migrations:
+3. (Optional) seed the database from `db/movies.csv`:
    ```bash
-   sqlx migrate run
-   ```
-4. (Optional) seed the database from a CSV:
-   ```bash
-   cargo run -- seed db/movies.csv
-   ```
-5. Run the API:
-   ```bash
-   cargo run
+   docker compose run --rm seed
    ```
 
 > The API is served at `http://localhost:3000/api/v1`.
