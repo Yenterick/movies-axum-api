@@ -7,12 +7,66 @@
     <img src="https://img.shields.io/badge/Axum-2D2D2D?logo=rust&logoColor=white" alt="Axum"/>
     <img src="https://img.shields.io/badge/Tokio-7E57C2?logo=tokio&logoColor=white" alt="Tokio"/>
     <img src="https://img.shields.io/badge/Serde-000000?logo=rust&logoColor=white" alt="Serde"/>
+    <img src="https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white" alt="PostgreSQL"/>
+    <img src="https://img.shields.io/badge/JWT-black?logo=jsonwebtokens&logoColor=white" alt="JWT"/>
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
 </p>
 
 <p align="center">
-    A RESTful API built with Rust and Axum for querying CSV data over a local HTTPS connection.
+    A RESTful movie catalogue API built with Rust, Axum and PostgreSQL, with JWT-protected write endpoints.
 </p>
+
+---
+
+## Requirements
+
+- **Rust** 1.85+ (2024 edition)
+- **Docker** + **Docker Compose** (to run PostgreSQL)
+- [`sqlx-cli`](https://github.com/launchbadge/sqlx/tree/main/sqlx-cli) to run migrations:
+  ```bash
+  cargo install sqlx-cli --no-default-features --features postgres
+  ```
+
+## Getting Started
+
+1. Configure the environment (fill in `POSTGRES_*`, `DATABASE_URL` and `JWT_SECRET_KEY`):
+   ```bash
+   cp .env.example .env
+   ```
+2. Start PostgreSQL:
+   ```bash
+   docker compose up -d
+   ```
+3. Run migrations:
+   ```bash
+   sqlx migrate run
+   ```
+4. (Optional) seed the database from a CSV:
+   ```bash
+   cargo run -- seed db/movies.csv
+   ```
+5. Run the API:
+   ```bash
+   cargo run
+   ```
+
+> The API is served at `http://localhost:3000/api/v1`.
+> Interactive Swagger docs live at `/api/v1/docs`.
+
+## Endpoints
+
+| Method | Path             | Auth      | Description                                  |
+|--------|------------------|-----------|-----------------------------------------------|
+| GET    | `/health`        | –         | Health check                                  |
+| GET    | `/movies`        | –         | List movies (`?limit=&offset=`)               |
+| GET    | `/movies/{id}`   | –         | Get a movie by id                             |
+| POST   | `/movies`        | Bearer    | Create a movie                                |
+| PATCH  | `/movies/{id}`   | Bearer    | Update a movie                                |
+| DELETE | `/movies/{id}`   | Bearer    | Delete a movie                                |
+| POST   | `/users/login`   | –         | Log in, returns a JWT                         |
+| POST   | `/users/bootstrap` | –       | Register a user (requires matching `secret_key`) |
+
+All paths are prefixed with `/api/v1`. Protected routes expect `Authorization: Bearer <token>`, obtained from `/users/login`.
 
 ---
 
