@@ -4,10 +4,14 @@ mod infrastructure;
 mod presentation;
 mod scripts;
 
+use dotenv::dotenv;
+
 use crate::presentation::api::app;
 
 #[tokio::main]
 async fn main() {
+    let _ = dotenv();
+
     let mut args = std::env::args();
     args.next();
 

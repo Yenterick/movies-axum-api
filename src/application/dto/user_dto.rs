@@ -11,6 +11,7 @@ pub struct UserLoginRequest {
 pub struct UserCreateRequest {
     pub username: String,
     pub password: String,
+    pub secret_key: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

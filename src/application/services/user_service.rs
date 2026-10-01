@@ -42,6 +42,13 @@ impl UserService {
     }
 
     pub async fn register(&self, request: UserCreateRequest) -> Result<UserResponse, UserError> {
+        let secret_key = std::env::var("JWT_SECRET_KEY")
+            .expect("JWT_SECRET_KEY environment variable must be set!");
+
+        if secret_key != request.secret_key {
+            return Err(UserError::NotFound("Secret key doesn't match!".to_string()));
+        }
+
         let password_hash = self
             .hash_service
             .hash_password(&request.password)
