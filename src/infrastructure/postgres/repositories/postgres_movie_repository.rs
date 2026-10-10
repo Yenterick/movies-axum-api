@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use sqlx::{FromRow, PgPool};
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 
 use crate::domain::entities::movie::{
     Country, CrewMember, Gender, Genre, Movie, MovieStatus, ProductionCompany, SpokenLanguage,
 };
-use crate::domain::repositories::movie_repository::MovieRepository;
+use crate::domain::repositories::movie_repository::{MovieFilter, MovieRepository};
 use crate::domain::{entities::movie::MovieUpdate, errors::MovieError};
 
 pub struct PostgresMovieRepository {
@@ -215,11 +215,63 @@ impl MovieRepository for PostgresMovieRepository {
         self.hydrate(rows).await
     }
 
-    async fn find_paginated(&self, limit: usize, offset: usize) -> Vec<Movie> {
-        let sql = format!("SELECT {MOVIE_COLUMNS} FROM movies ORDER BY id LIMIT $1 OFFSET $2");
-        let rows = sqlx::query_as::<_, MovieRow>(sqlx::AssertSqlSafe(sql))
-            .bind(limit as i64)
-            .bind(offset as i64)
+    async fn find_paginated(&self, limit: usize, offset: usize, filter: &MovieFilter) -> Vec<Movie> {
+        let mut builder: QueryBuilder<Postgres> =
+            QueryBuilder::new(format!("SELECT {MOVIE_COLUMNS} FROM movies WHERE 1 = 1"));
+
+        if let Some(genre) = filter.genre {
+            builder.push(
+                " AND EXISTS (SELECT 1 FROM movie_genres mg \
+                  JOIN genres g ON g.id = mg.genre_id \
+                  WHERE mg.movie_id = movies.id AND g.name = ",
+            );
+            builder.push_bind(genre_to_str(genre));
+            builder.push(")");
+        }
+
+        if let Some(keyword) = &filter.keyword {
+            builder.push(
+                " AND EXISTS (SELECT 1 FROM movie_keywords mk \
+                  JOIN keywords k ON k.id = mk.keyword_id \
+                  WHERE mk.movie_id = movies.id AND k.name ILIKE ",
+            );
+            builder.push_bind(like_pattern(keyword));
+            builder.push(")");
+        }
+
+        if let Some(language) = &filter.language {
+            builder.push(" AND LOWER(original_language) = LOWER(");
+            builder.push_bind(language.clone());
+            builder.push(")");
+        }
+
+        if let Some(country) = &filter.country {
+            builder.push(
+                " AND EXISTS (SELECT 1 FROM movie_production_countries mpc \
+                  JOIN production_countries c ON c.iso_3166_1 = mpc.country_iso \
+                  WHERE mpc.movie_id = movies.id AND (c.iso_3166_1 ILIKE ",
+            );
+            builder.push_bind(country.clone());
+            builder.push(" OR c.name ILIKE ");
+            builder.push_bind(like_pattern(country));
+            builder.push("))");
+        }
+
+        if let Some(search) = &filter.search {
+            builder.push(" AND (title ILIKE ");
+            builder.push_bind(like_pattern(search));
+            builder.push(" OR original_title ILIKE ");
+            builder.push_bind(like_pattern(search));
+            builder.push(")");
+        }
+
+        builder.push(" ORDER BY id LIMIT ");
+        builder.push_bind(limit as i64);
+        builder.push(" OFFSET ");
+        builder.push_bind(offset as i64);
+
+        let rows = builder
+            .build_query_as::<MovieRow>()
             .fetch_all(&self.pool)
             .await
             .unwrap_or_default();
@@ -515,6 +567,11 @@ impl MovieRepository for PostgresMovieRepository {
 
 fn db_error(error: sqlx::Error) -> MovieError {
     MovieError::RepositoryError(error.to_string())
+}
+
+fn like_pattern(raw: &str) -> String {
+    let escaped = raw.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    format!("%{escaped}%")
 }
 
 #[derive(FromRow)]

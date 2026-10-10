@@ -45,7 +45,7 @@
 | Method | Path             | Auth      | Description                                  |
 |--------|------------------|-----------|-----------------------------------------------|
 | GET    | `/health`        | –         | Health check                                  |
-| GET    | `/movies`        | –         | List movies (`?limit=&offset=`)               |
+| GET    | `/movies`        | –         | List movies, paginated and filterable (see below) |
 | GET    | `/movies/{id}`   | –         | Get a movie by id                             |
 | POST   | `/movies`        | Bearer    | Create a movie                                |
 | PATCH  | `/movies/{id}`   | Bearer    | Update a movie                                |
@@ -54,6 +54,26 @@
 | POST   | `/users/bootstrap` | –       | Register a user (requires matching `secret_key`) |
 
 All paths are prefixed with `/api/v1`. Protected routes expect `Authorization: Bearer <token>`, obtained from `/users/login`.
+
+### Listing & filtering movies
+
+`GET /movies` supports pagination and the following optional query filters, all combinable:
+
+| Query param | Type   | Matches                                                        |
+|-------------|--------|-----------------------------------------------------------------|
+| `limit`     | number | Page size (default `10`)                                        |
+| `offset`    | number | Page offset (default `0`)                                       |
+| `genre`     | string | Movies tagged with the given genre (e.g. `Action`)               |
+| `keyword`   | string | Movies with a keyword containing the text (case-insensitive)     |
+| `language`  | string | Movies whose original language code matches exactly (e.g. `en`)  |
+| `country`   | string | Movies with a production country matching the ISO code or name   |
+| `search`    | string | Movies whose title or original title contains the text, anywhere, case-insensitive |
+
+Example:
+
+```
+GET /api/v1/movies?genre=Action&language=en&search=venger&limit=20
+```
 
 ---
 
