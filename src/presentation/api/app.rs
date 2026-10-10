@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::Router;
+use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -34,6 +35,7 @@ pub async fn run() -> Router {
         .nest("/health", health::router())
         .nest("/movies", movies::router())
         .nest("/users", users::router())
+        .layer(CorsLayer::permissive())
         .with_state(state);
 
     Router::new().nest("/api/v1", api_router).merge(
