@@ -6,6 +6,7 @@ use crate::domain::entities::movie::{
     Country, CrewMember, Gender, Genre, Movie, MovieStatus, MovieUpdate, ProductionCompany,
     SpokenLanguage,
 };
+use crate::domain::repositories::movie_repository::MovieFilter;
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct MovieListQuery {
@@ -15,10 +16,37 @@ pub struct MovieListQuery {
     #[serde(default)]
     #[param(example = 0)]
     pub offset: usize,
+    #[serde(default)]
+    #[param(example = "Action")]
+    pub genre: Option<GenreRequest>,
+    #[serde(default)]
+    #[param(example = "shipwreck")]
+    pub keyword: Option<String>,
+    #[serde(default)]
+    #[param(example = "en")]
+    pub language: Option<String>,
+    #[serde(default)]
+    #[param(example = "US")]
+    pub country: Option<String>,
+    #[serde(default)]
+    #[param(example = "avengers")]
+    pub search: Option<String>,
 }
 
 fn default_limit() -> usize {
     10
+}
+
+impl From<&MovieListQuery> for MovieFilter {
+    fn from(query: &MovieListQuery) -> Self {
+        MovieFilter {
+            genre: query.genre.map(Into::into),
+            keyword: query.keyword.clone(),
+            language: query.language.clone(),
+            country: query.country.clone(),
+            search: query.search.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

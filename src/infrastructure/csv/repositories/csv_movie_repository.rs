@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::domain::entities::movie::{CrewMember, Gender, Genre, Movie, MovieStatus, MovieUpdate};
 use crate::domain::errors::MovieError;
-use crate::domain::repositories::movie_repository::MovieRepository;
+use crate::domain::repositories::movie_repository::{MovieFilter, MovieRepository};
 use crate::infrastructure::csv::csv_parser;
 
 pub struct CsvMovieRepository {
@@ -48,11 +48,12 @@ impl MovieRepository for CsvMovieRepository {
         Ok(self.movies.read().await.clone())
     }
 
-    async fn find_paginated(&self, limit: usize, offset: usize) -> Vec<Movie> {
+    async fn find_paginated(&self, limit: usize, offset: usize, filter: &MovieFilter) -> Vec<Movie> {
         self.movies
             .read()
             .await
             .iter()
+            .filter(|movie| matches_filter(movie, filter))
             .skip(offset)
             .take(limit)
             .cloned()
@@ -97,6 +98,52 @@ impl MovieRepository for CsvMovieRepository {
         movies.remove(position);
         Ok(())
     }
+}
+
+fn matches_filter(movie: &Movie, filter: &MovieFilter) -> bool {
+    if let Some(genre) = filter.genre
+        && !movie.genres.contains(&genre)
+    {
+        return false;
+    }
+
+    if let Some(keyword) = &filter.keyword {
+        let keyword = keyword.to_lowercase();
+        if !movie
+            .keywords
+            .iter()
+            .any(|value| value.to_lowercase().contains(&keyword))
+        {
+            return false;
+        }
+    }
+
+    if let Some(language) = &filter.language
+        && !movie.original_language.eq_ignore_ascii_case(language)
+    {
+        return false;
+    }
+
+    if let Some(country) = &filter.country {
+        let country_lower = country.to_lowercase();
+        if !movie.production_countries.iter().any(|value| {
+            value.iso_3166_1.eq_ignore_ascii_case(country)
+                || value.name.to_lowercase().contains(&country_lower)
+        }) {
+            return false;
+        }
+    }
+
+    if let Some(search) = &filter.search {
+        let search = search.to_lowercase();
+        if !movie.title.to_lowercase().contains(&search)
+            && !movie.original_title.to_lowercase().contains(&search)
+        {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn field<'a>(record: &'a StringRecord, headers: &HashMap<String, usize>, name: &str) -> &'a str {

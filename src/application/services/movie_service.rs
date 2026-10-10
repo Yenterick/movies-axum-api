@@ -4,7 +4,7 @@ use crate::application::dto::movie_dto::{
     MovieCreateRequest, MovieListQuery, MoviePatchRequest, MovieResponse,
 };
 use crate::domain::errors::MovieError;
-use crate::domain::repositories::movie_repository::MovieRepository;
+use crate::domain::repositories::movie_repository::{MovieFilter, MovieRepository};
 
 #[derive(Clone)]
 pub struct MovieService {
@@ -17,8 +17,9 @@ impl MovieService {
     }
 
     pub async fn get_all(&self, query: MovieListQuery) -> Vec<MovieResponse> {
+        let filter: MovieFilter = (&query).into();
         self.repository
-            .find_paginated(query.limit, query.offset)
+            .find_paginated(query.limit, query.offset, &filter)
             .await
             .into_iter()
             .map(Into::into)
