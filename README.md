@@ -191,6 +191,12 @@ erDiagram
     }
 ```
 
+## Architecture Diagram
+
+<p align="center">
+    <img src="./docs/arch-diagram.jpeg" alt="arquitectura"/>
+</p>
+
 ---
 
 ## License
