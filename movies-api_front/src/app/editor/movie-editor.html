@@ -1,0 +1,93 @@
+<div class="scrim" (click)="close()"></div>
+<aside class="drawer" role="dialog" aria-modal="true" [attr.aria-label]="isEdit ? 'Editar película' : 'Nueva película'">
+  <header class="drawer-head">
+    <div>
+      <p class="eyebrow">{{ isEdit ? 'Editar · #' + movie!.id : 'Panel de administración' }}</p>
+      <h2>{{ isEdit ? movie!.title : 'Nueva película' }}</h2>
+    </div>
+    <button class="icon-btn" (click)="close()" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </header>
+
+  <form class="drawer-body" (ngSubmit)="save()" novalidate>
+    <section class="group">
+      <h3>Identidad</h3>
+      <label class="f full"><span>Título *</span><input class="field" name="title" [(ngModel)]="draft.title" required /></label>
+      <label class="f"><span>Título original</span><input class="field" name="original_title" [(ngModel)]="draft.original_title" [placeholder]="draft.title" /></label>
+      <label class="f"><span>Estado</span>
+        <select class="field" name="status" [(ngModel)]="draft.status">
+          @for (s of statuses; track s.value) { <option [value]="s.value">{{ s.label }}</option> }
+        </select>
+      </label>
+      <label class="f full"><span>Tagline</span><input class="field" name="tagline" [(ngModel)]="draft.tagline" placeholder="Una frase que venda la película" /></label>
+      <label class="f full"><span>Sinopsis</span><textarea class="field" name="overview" rows="4" [(ngModel)]="draft.overview"></textarea></label>
+    </section>
+
+    <section class="group">
+      <h3>Lanzamiento</h3>
+      <label class="f"><span>Fecha de estreno</span><input class="field" type="date" name="release_date" [(ngModel)]="draft.release_date" /></label>
+      <label class="f"><span>Duración (min)</span><input class="field" type="number" min="0" name="runtime" [(ngModel)]="draft.runtime" /></label>
+      <label class="f"><span>Idioma original</span>
+        <select class="field" name="original_language" [(ngModel)]="draft.original_language">
+          @for (l of languages; track l.code) { <option [value]="l.code">{{ l.name }}</option> }
+          @if (!knownLanguage()) { <option [value]="draft.original_language">{{ draft.original_language }}</option> }
+        </select>
+      </label>
+      <label class="f"><span>Sitio oficial</span><input class="field" type="url" name="homepage" [(ngModel)]="draft.homepage" placeholder="https://…" /></label>
+    </section>
+
+    <section class="group">
+      <h3>Números</h3>
+      <label class="f"><span>Presupuesto (USD)</span><input class="field" type="number" min="0" step="1000" name="budget" [(ngModel)]="draft.budget" /></label>
+      <label class="f"><span>Taquilla (USD)</span><input class="field" type="number" min="0" step="1000" name="revenue" [(ngModel)]="draft.revenue" /></label>
+      <label class="f"><span>Rating (0–10)</span><input class="field" type="number" min="0" max="10" step="0.1" name="vote_average" [(ngModel)]="draft.vote_average" /></label>
+      <label class="f"><span>Votos</span><input class="field" type="number" min="0" name="vote_count" [(ngModel)]="draft.vote_count" /></label>
+      <label class="f"><span>Popularidad</span><input class="field" type="number" min="0" step="0.1" name="popularity" [(ngModel)]="draft.popularity" /></label>
+    </section>
+
+    @if (!isEdit) {
+      <section class="group">
+        <h3>Clasificación y créditos</h3>
+        <div class="f full">
+          <span>Géneros *</span>
+          <div class="chips">
+            @for (g of genres; track g) {
+              <button type="button" class="chip chip-sm" [class.active]="draft.genres.includes(g)" (click)="toggleGenre(g)">{{ genreLabel(g) }}</button>
+            }
+          </div>
+        </div>
+        <label class="f full"><span>Director</span><input class="field" name="director" [(ngModel)]="draft.director" /></label>
+        <label class="f full"><span>Reparto <small>separado por comas</small></span><input class="field" name="cast" [(ngModel)]="draft.cast" placeholder="Actriz Uno, Actor Dos" /></label>
+        <label class="f full"><span>Palabras clave <small>separadas por comas</small></span><input class="field" name="keywords" [(ngModel)]="draft.keywords" placeholder="space, heist" /></label>
+        <label class="f full"><span>Estudios <small>separados por comas</small></span><input class="field" name="companies" [(ngModel)]="draft.companies" /></label>
+        <div class="f full">
+          <span>Países de producción</span>
+          <div class="chips country-chips">
+            @for (c of countries; track c.iso_3166_1) {
+              <button type="button" class="chip chip-sm" [class.active]="draft.countries.includes(c.iso_3166_1)" (click)="toggleCountry(c.iso_3166_1)">{{ c.iso_3166_1 }} · {{ c.name }}</button>
+            }
+          </div>
+        </div>
+      </section>
+    } @else {
+      <p class="note">Géneros, reparto, director, palabras clave, estudios y países no se pueden modificar con <code class="mono">PATCH /movies/{{ '{' }}id{{ '}' }}</code>; solo se definen al crear la película.</p>
+    }
+
+    @if (error()) { <div class="alert" role="alert">{{ error() }}</div> }
+
+    <footer class="drawer-foot">
+      @if (isEdit) {
+        <button type="button" class="btn danger" [class.armed]="confirmDelete()" (click)="remove()" [disabled]="saving()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+          {{ confirmDelete() ? '¿Seguro? Clic para eliminar' : 'Eliminar' }}
+        </button>
+      }
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost" (click)="close()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving()">
+        @if (saving()) { <span class="spinner"></span> Guardando… } @else { {{ isEdit ? 'Guardar cambios' : 'Crear película' }} }
+      </button>
+    </footer>
+  </form>
+</aside>

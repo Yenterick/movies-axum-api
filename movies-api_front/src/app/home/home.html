@@ -1,178 +1,388 @@
-<div class="page-wrapper">
-    <!-- Navbar -->
-    <nav class="navbar">
-        <h1 class="nav-brand"><span class="brand-accent">Movies</span>App</h1>
-        <div class="nav-actions">
-            <button *ngIf="!isLoggedIn" (click)="goToLogin()" class="btn btn-secondary">
-                Panel Admin
-            </button>
-            <button *ngIf="isLoggedIn" (click)="logout()" class="btn btn-danger">
-                Cerrar Sesión
-            </button>
-        </div>
-    </nav>
-
-    <!-- Main Content -->
-    <main class="main-content">
-        <div class="page-header">
-            <h2 class="page-title">Películas Destacadas</h2>
-            <p class="page-subtitle">Explora nuestra colección de títulos increíbles.</p>
-        </div>
-
-        <!-- Loading State -->
-        <div *ngIf="isLoading" class="loading-state">
-            <div class="spinner"></div>
-            <p class="loading-text">Cargando películas...</p>
-        </div>
-
-        <!-- Error State -->
-        <div *ngIf="error && !isLoading" class="error-state">
-            <p class="error-title">Error de conexión</p>
-            <p class="error-message">{{ error }}</p>
-            <button (click)="fetchMovies()" class="btn btn-danger">Reintentar</button>
-        </div>
-
-        <!-- Movies Grid -->
-        <div *ngIf="!isLoading && movies.length > 0" class="movies-grid">
-            <div *ngFor="let movie of movies"
-                class="movie-card"
-                (click)="openMovieDetail(movie)"
-                role="button"
-                tabindex="0"
-                (keydown.enter)="openMovieDetail(movie)"
-                [attr.aria-label]="'Ver detalles de ' + movie.title">
-
-                <!-- Poster -->
-                <div class="card-poster">
-                    <img
-                        [src]="movie.posterUrl || getPosterFallback(movie)"
-                        [alt]="movie.title"
-                        class="poster-img"
-                        (error)="$any($event.target).src = getPosterFallback(movie)"
-                    />
-                    <div class="poster-overlay"></div>
-                </div>
-
-                <!-- Rating badge -->
-                <div *ngIf="movie.vote_average && movie.vote_average > 0" class="rating-badge">
-                    ★ {{ movie.vote_average | number:'1.1-1' }}
-                </div>
-
-                <!-- "More info" hint icon -->
-                <div class="more-info-hint">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                </div>
-
-                <!-- Info Overlay -->
-                <div class="card-info">
-                    <span class="genre-badge">{{ movie.genre || 'Desconocido' }}</span>
-                    <h3 class="card-title">{{ movie.title }}</h3>
-                    <p class="card-meta">
-                        <span>{{ movie.year || 'N/A' }}</span>
-                        <span *ngIf="movie.runtime" class="meta-dot">• {{ movie.runtime }} min</span>
-                    </p>
-                    <p *ngIf="movie.director" class="card-director">Dir: <span>{{ movie.director }}</span></p>
-                    <p class="card-description">{{ movie.description || 'Sin descripción disponible.' }}</p>
-                    <span class="card-cta">Ver más →</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Empty State -->
-        <div *ngIf="!isLoading && movies.length === 0 && !error" class="empty-state">
-            No hay películas disponibles en este momento.
-        </div>
-
-        <!-- Load More Button -->
-        <div *ngIf="!isLoading && hasMore && movies.length > 0" class="load-more-wrapper">
-            <button (click)="loadMore()" [disabled]="isLoadingMore" class="btn btn-load-more">
-                <span *ngIf="!isLoadingMore">Cargar más películas</span>
-                <span *ngIf="isLoadingMore" class="loading-btn">
-                    <span class="btn-spinner"></span>
-                    Cargando...
-                </span>
-            </button>
-        </div>
-
-        <!-- All loaded indicator -->
-        <div *ngIf="!isLoading && !hasMore && movies.length > 0" class="all-loaded">
-            Se muestran todas las {{ movies.length }} películas disponibles.
-        </div>
-    </main>
-</div>
-
-<!-- =================== MOVIE DETAIL MODAL =================== -->
-<div class="modal-backdrop" [class.modal-open]="isModalVisible" (click)="closeModal()">
-    <div class="modal-container" (click)="$event.stopPropagation()" *ngIf="selectedMovie" role="dialog" aria-modal="true">
-
-        <!-- Close button -->
-        <button class="modal-close" (click)="closeModal()" aria-label="Cerrar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-
-        <!-- Loading overlay inside modal -->
-        <div *ngIf="isModalLoading" class="modal-loading">
-            <div class="spinner"></div>
-        </div>
-
-        <div class="modal-inner">
-            <!-- Poster / Hero section -->
-            <div class="modal-poster-col">
-                <div class="modal-poster-wrapper">
-                    <img
-                        [src]="selectedMovie.posterUrl || getPosterFallback(selectedMovie)"
-                        [alt]="selectedMovie.title"
-                        class="modal-poster-img"
-                        (error)="$any($event.target).src = getPosterFallback(selectedMovie)"
-                    />
-                    <!-- Rating overlay on poster -->
-                    <div *ngIf="selectedMovie.vote_average && selectedMovie.vote_average > 0" class="modal-rating-ring">
-                        <span class="modal-rating-value">{{ selectedMovie.vote_average | number:'1.1-1' }}</span>
-                        <span class="modal-rating-label">Puntuación</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Info section -->
-            <div class="modal-info-col">
-                <div class="modal-genre-row">
-                    <span class="genre-badge">{{ selectedMovie.genre || 'Desconocido' }}</span>
-                    <span *ngIf="selectedMovie.year" class="modal-year">{{ selectedMovie.year }}</span>
-                </div>
-
-                <h2 class="modal-title">{{ selectedMovie.title }}</h2>
-
-                <!-- Stats grid -->
-                <div class="modal-stats">
-                    <div *ngIf="selectedMovie.runtime" class="stat-item">
-                        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <div>
-                            <p class="stat-label">Duración</p>
-                            <p class="stat-value">{{ selectedMovie.runtime }} min</p>
-                        </div>
-                    </div>
-                    <div *ngIf="selectedMovie.director" class="stat-item">
-                        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        <div>
-                            <p class="stat-label">Director</p>
-                            <p class="stat-value">{{ selectedMovie.director }}</p>
-                        </div>
-                    </div>
-                    <div *ngIf="selectedMovie.budget" class="stat-item">
-                        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                        <div>
-                            <p class="stat-label">Presupuesto</p>
-                            <p class="stat-value">{{ formatBudget(selectedMovie.budget) }}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Description -->
-                <div class="modal-description-section">
-                    <h4 class="modal-section-label">Sinopsis</h4>
-                    <p class="modal-description">{{ selectedMovie.description || 'Sin descripción disponible.' }}</p>
-                </div>
-            </div>
-        </div>
+<!-- ===================== NAV ===================== -->
+<nav class="nav" [class.scrolled]="scrolled()">
+  <div class="shell nav-inner">
+    <a class="brand" routerLink="/" (click)="scrollTo('top')">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="6.8" r="1.6"/><circle cx="12" cy="17.2" r="1.6"/><circle cx="6.8" cy="12" r="1.6"/><circle cx="17.2" cy="12" r="1.6"/></svg>
+      </span>
+      <span>Cine<span class="gradient-text">Data</span></span>
+    </a>
+    <div class="nav-links">
+      <button (click)="scrollTo('analytics')">Analítica</button>
+      <button (click)="scrollTo('catalog')">Catálogo</button>
     </div>
+    <div class="nav-actions">
+      @if (api.username(); as user) {
+        <button class="btn btn-sm btn-primary" (click)="openEditor(null)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="hide-sm">Nueva película</span>
+        </button>
+        <span class="user-pill" title="Sesión de administrador"><span class="user-dot">{{ user.charAt(0).toUpperCase() }}</span>{{ user }}</span>
+        <button class="btn btn-sm" (click)="logout()">Salir</button>
+      } @else {
+        <a class="btn btn-sm btn-primary" routerLink="/login">Iniciar sesión</a>
+      }
+    </div>
+  </div>
+</nav>
+
+<!-- ===================== HERO ===================== -->
+<header class="hero" id="top">
+  <div class="hero-bg"></div>
+  <app-cinema-scene variant="hero" />
+  <div class="hero-vignette"></div>
+
+  <div class="shell hero-inner">
+    <div class="hero-copy">
+      <p class="eyebrow">Movies API · Axum + PostgreSQL</p>
+      <h1 class="hero-title">
+        Cada película,<br>
+        <span class="gradient-text">cada dólar,</span><br>
+        cada estrella.
+      </h1>
+      <p class="hero-lede">Explora {{ overview() ? overview()!.total_movies.toLocaleString('es') : 'miles de' }} películas y el dinero, la crítica y el talento detrás de ellas, servidos en tiempo real por una API en Rust.</p>
+
+      <div class="hero-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" placeholder="Busca Avatar, Nolan, Pixar…" aria-label="Buscar películas"
+          [value]="search()" (keydown.enter)="onSearchInput($any($event.target).value); $any($event.target).blur()" />
+        <button class="btn btn-primary btn-sm" (click)="scrollTo('catalog')">Explorar</button>
+      </div>
+
+      <div class="hero-stats">
+        <div><strong class="mono">{{ heroStats().movies | number:'1.0-0' }}</strong><span>películas</span></div>
+        <div><strong class="mono">{{ money(heroStats().revenue) }}</strong><span>en taquilla</span></div>
+        <div><strong class="mono">{{ compact(heroStats().votes) }}</strong><span>votos del público</span></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="scroll-cue" (click)="scrollTo('analytics')" aria-label="Bajar a la analítica"><span></span></button>
+</header>
+
+<!-- Genre marquee -->
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">
+    @for (pass of [0, 1]; track pass) {
+      @for (g of genres; track g) { <span>{{ genreLabel(g) }}</span><i>✦</i> }
+    }
+  </div>
 </div>
+
+<!-- ===================== ANALYTICS ===================== -->
+<app-analytics
+  (genreSelected)="filterFromAnalytics('genre', $event)"
+  (countrySelected)="filterFromAnalytics('country', $event)"
+  (movieSelected)="openMovie($event)" />
+
+<!-- ===================== CATALOG ===================== -->
+<section class="catalog shell" id="catalog" #catalog>
+  <header class="catalog-head">
+    <div>
+      <p class="eyebrow">Catálogo</p>
+      <h2 class="section-title">Encuentra tu <span class="gradient-text">próxima función</span></h2>
+    </div>
+    <p class="catalog-range mono">{{ loading() ? 'Cargando…' : rangeLabel() }}</p>
+  </header>
+
+  <!-- Search + toolbar -->
+  <div class="toolbar card">
+    <label class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input #searchInput type="search" placeholder="Busca por título…" aria-label="Buscar por título"
+        [value]="search()" (input)="onSearchInput($any($event.target).value)" />
+      @if (search()) {
+        <button class="icon-btn" (click)="clearSearch()" aria-label="Limpiar búsqueda">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      } @else {
+        <kbd>/</kbd>
+      }
+    </label>
+    <button class="btn filter-toggle" [class.on]="showFilters()" (click)="showFilters.set(!showFilters())" [attr.aria-expanded]="showFilters()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      Filtros
+      @if (activeFilterCount()) { <span class="badge">{{ activeFilterCount() }}</span> }
+    </button>
+    <div class="segmented size-picker" aria-label="Resultados por página">
+      @for (s of pageSizes; track s) {
+        <button [class.active]="pageSize() === s" (click)="setPageSize(s)">{{ s }}</button>
+      }
+    </div>
+  </div>
+
+  <!-- Filter drawer -->
+  <div class="filters" [class.open]="showFilters()">
+    <div class="filters-inner">
+      <div class="filter-block">
+        <span class="filter-label">Género</span>
+        <div class="chips">
+          <button class="chip" [class.active]="!genre()" (click)="setGenre('')">Todos</button>
+          @for (g of genres; track g) {
+            <button class="chip" [class.active]="genre() === g" (click)="setGenre(g)">{{ genreLabel(g) }}</button>
+          }
+        </div>
+      </div>
+      <div class="filter-row">
+        <label class="filter-field">
+          <span class="filter-label">Idioma original</span>
+          <select class="field" [value]="language()" (change)="setFilter('language', $any($event.target).value)">
+            <option value="">Cualquiera</option>
+            @for (l of languages; track l.code) { <option [value]="l.code">{{ l.name }}</option> }
+          </select>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">País de producción</span>
+          <select class="field" [value]="country()" (change)="setFilter('country', $any($event.target).value)">
+            <option value="">Cualquiera</option>
+            @for (c of countryStats(); track c.iso_3166_1) {
+              <option [value]="c.iso_3166_1" [selected]="c.iso_3166_1 === country()">{{ flag(c.iso_3166_1) }} {{ c.name }} ({{ c.movie_count }})</option>
+            }
+          </select>
+        </label>
+        <label class="filter-field">
+          <span class="filter-label">Palabra clave</span>
+          <input class="field" type="text" placeholder="space, heist, dystopia…" [value]="keyword()"
+            (keydown.enter)="setFilter('keyword', $any($event.target).value)"
+            (blur)="$any($event.target).value !== keyword() && setFilter('keyword', $any($event.target).value)" />
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active filter pills -->
+  @if (activeFilterCount() || search()) {
+    <div class="active-filters">
+      @if (search()) { <button class="pill" (click)="clearSearch()">“{{ search() }}” <span>×</span></button> }
+      @if (genre()) { <button class="pill" (click)="setGenre('')">{{ genreLabel(genre()) }} <span>×</span></button> }
+      @if (language()) { <button class="pill" (click)="setFilter('language', '')">{{ languageName() }} <span>×</span></button> }
+      @if (country()) { <button class="pill" (click)="setFilter('country', '')">{{ flag(country()) }} {{ countryName() }} <span>×</span></button> }
+      @if (keyword()) { <button class="pill" (click)="setFilter('keyword', '')">#{{ keyword() }} <span>×</span></button> }
+      @if (activeFilterCount() > 1) { <button class="pill-clear" (click)="clearFilters()">Limpiar filtros</button> }
+    </div>
+  }
+
+  <!-- Results -->
+  @if (error()) {
+    <div class="state card">
+      <div class="state-icon">⚠</div>
+      <h3>Algo salió mal</h3>
+      <p>{{ error() }}</p>
+      <button class="btn btn-primary" (click)="fetch()">Reintentar</button>
+    </div>
+  } @else {
+    <div class="results" #results [style.min-height.px]="resultsMinHeight()">
+    <boneyard-skeleton name="catalog-grid" [loading]="loading()" [transition]="250" [snapshotConfig]="gridSnapshot">
+      <div fallback class="grid">
+        @for (i of skeletonCards; track i) {
+          <div><div class="bone-fallback" style="aspect-ratio:2/3"></div><div class="bone-fallback" style="height:14px;margin-top:12px;width:80%"></div><div class="bone-fallback" style="height:10px;margin-top:8px;width:45%"></div></div>
+        }
+      </div>
+      @if (!loading()) {
+        @if (movies().length) {
+          <div class="grid">
+            @for (m of movies(); track m.id; let i = $index) {
+              <div class="poster-card" role="button" tabindex="0" (click)="openMovie(m.id, m)" (keydown.enter)="openMovie(m.id, m)" (keydown.space)="$event.preventDefault(); openMovie(m.id, m)" [style.animation-delay.ms]="i * 25" [attr.aria-label]="'Ver ' + m.title">
+                <div class="poster" [style.background]="posterGradient(m.id)">
+                  @if (posters.posters()[m.id]; as url) {
+                    <img class="poster-img" [src]="url" alt="" loading="lazy" decoding="async"
+                      (load)="$any($event.target).classList.add('loaded')" (error)="posters.forget(m.id)" />
+                  }
+                  <span class="poster-top">
+                    <span class="poster-year mono">{{ year(m.release_date) }}</span>
+                    @if (m.vote_count > 0) { <span class="poster-rating mono">★ {{ rating(m.vote_average) }}</span> }
+                  </span>
+                  <span class="poster-title">{{ m.title }}</span>
+                  @if (m.tagline) { <span class="poster-tagline">{{ m.tagline }}</span> }
+                  <span class="poster-foot">
+                    @if (m.director) { <span>{{ m.director }}</span> }
+                    @if (m.runtime) { <span class="mono">{{ m.runtime }}′</span> }
+                  </span>
+                  <span class="poster-glare"></span>
+                </div>
+                <div class="card-meta">
+                  <p class="card-title">{{ m.title }}</p>
+                  <p class="card-genres">{{ m.genres.slice(0, 2).map(genreLabel).join(' · ') || 'Sin género' }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="state card">
+            <div class="state-icon">🎬</div>
+            <h3>Sin resultados</h3>
+            <p>Ninguna película coincide con esta combinación. Prueba con menos filtros.</p>
+            <button class="btn" (click)="clearFilters(); clearSearch()">Limpiar todo</button>
+          </div>
+        }
+      }
+    </boneyard-skeleton>
+    </div>
+
+    <!-- Pagination -->
+    @if (movies().length || page() > 1) {
+      <nav class="pagination" aria-label="Paginación">
+        <button class="btn page-nav" (click)="goToPage(page() - 1)" [disabled]="page() === 1 || loading()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m15 18-6-6 6-6"/></svg>
+          <span>Anterior</span>
+        </button>
+        <div class="pages">
+          @if (totalPages() !== null) {
+            @for (p of pageItems(); track $index) {
+              @if (p === '…') { <span class="page-gap">…</span> }
+              @else { <button class="page-num mono" [class.active]="p === page()" (click)="goToPage(p)" [disabled]="loading()" [attr.aria-current]="p === page() ? 'page' : null">{{ p }}</button> }
+            }
+          } @else {
+            <span class="page-num active mono">{{ page() }}</span>
+          }
+        </div>
+        <button class="btn page-nav" (click)="goToPage(page() + 1)"
+          [disabled]="loading() || (totalPages() !== null ? page() >= totalPages()! : !hasNext())">
+          <span>Siguiente</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </nav>
+      @if (totalPages() !== null) {
+        <p class="page-caption mono">Página {{ page() }} de {{ totalPages()!.toLocaleString('es') }}</p>
+      }
+    }
+  }
+</section>
+
+<footer class="footer shell">
+  <span class="brand"><span>Cine<span class="gradient-text">Data</span></span></span>
+  <span class="mono">Axum · PostgreSQL · Angular · three.js</span>
+  <a class="mono" href="http://localhost:3000/api/v1/docs" target="_blank" rel="noopener">API docs ↗</a>
+</footer>
+
+<!-- ===================== DETAIL MODAL ===================== -->
+@if (modalOpen()) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal" role="dialog" aria-modal="true" [attr.aria-label]="selected()?.title ?? 'Detalle de película'" (click)="$event.stopPropagation()">
+      <button class="modal-close icon-btn" (click)="closeModal()" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <boneyard-skeleton name="movie-detail" [loading]="modalLoading()" [transition]="200">
+        <div fallback class="modal-fallback">
+          <div class="bone-fallback" style="height:220px;border-radius:0"></div>
+          <div style="padding:28px;display:grid;gap:14px"><div class="bone-fallback" style="height:34px;width:60%"></div><div class="bone-fallback" style="height:14px;width:40%"></div><div class="bone-fallback" style="height:90px"></div><div class="bone-fallback" style="height:120px"></div></div>
+        </div>
+        @if (!modalLoading() && selected(); as m) {
+          <div class="modal-hero" [style.background]="posterGradient(m.id)">
+            @if (posters.posters()[m.id]; as url) {
+              <img class="modal-backdrop-img" [src]="url" alt="" />
+            }
+            <div class="modal-hero-fade"></div>
+            @if (posters.posters()[m.id]; as url) {
+              <img class="modal-poster" [src]="url" [alt]="'Póster de ' + m.title" (error)="posters.forget(m.id)" />
+            }
+            <div class="modal-hero-content">
+              <div class="modal-genres">
+                @for (g of m.genres; track g) { <button class="tag tag-btn" (click)="filterFromModal('genre', g)">{{ genreLabel(g) }}</button> }
+              </div>
+              <h2 class="modal-title">{{ m.title }}</h2>
+              @if (m.original_title && m.original_title !== m.title) { <p class="modal-original">{{ m.original_title }}</p> }
+              @if (m.tagline) { <p class="modal-tagline">“{{ m.tagline }}”</p> }
+            </div>
+            <div class="rating-ring" [attr.aria-label]="'Calificación ' + rating(m.vote_average)">
+              <svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="26" class="ring-bg"/><circle cx="30" cy="30" r="26" class="ring-fg" [attr.stroke-dasharray]="ratingDash(m.vote_average)"/></svg>
+              <strong class="mono">{{ rating(m.vote_average) }}</strong>
+              <span>{{ compact(m.vote_count) }} votos</span>
+            </div>
+          </div>
+
+          <div class="modal-body">
+            <div class="facts">
+              <div><span>Estreno</span><strong>{{ m.release_date ? (m.release_date) : '—' }}</strong></div>
+              <div><span>Duración</span><strong>{{ m.runtime ? m.runtime + ' min' : '—' }}</strong></div>
+              <div><span>Director</span><strong>{{ m.director || '—' }}</strong></div>
+              <div><span>Idioma</span><strong>{{ m.original_language.toUpperCase() }}</strong></div>
+            </div>
+
+            @if (m.overview) {
+              <h3 class="modal-h">Sinopsis</h3>
+              <p class="overview">{{ m.overview }}</p>
+            }
+
+            @if (m.budget || m.revenue) {
+              <h3 class="modal-h">Finanzas</h3>
+              <div class="money-card">
+                <div class="money-row">
+                  <span>Presupuesto</span>
+                  <span class="money-track"><span class="money-fill budget" [style.width.%]="budgetShare(m)"></span></span>
+                  <strong class="mono">{{ money(m.budget) }}</strong>
+                </div>
+                <div class="money-row">
+                  <span>Taquilla</span>
+                  <span class="money-track"><span class="money-fill revenue" [style.width.%]="revenueShare(m)"></span></span>
+                  <strong class="mono">{{ money(m.revenue) }}</strong>
+                </div>
+                @if (m.budget && m.revenue) {
+                  <p class="money-verdict" [class.loss]="profit(m) < 0">
+                    {{ profit(m) >= 0 ? 'Ganancia' : 'Pérdida' }} de <strong>{{ money(profit(m)) }}</strong>
+                    · {{ multiple((m.revenue - m.budget) / m.budget) }} su presupuesto
+                  </p>
+                }
+              </div>
+            }
+
+            @if (m.cast.length) {
+              <h3 class="modal-h">Reparto</h3>
+              <div class="people">
+                @for (c of m.cast.slice(0, 10); track c) { <span class="person"><span class="person-dot">{{ c.charAt(0) }}</span>{{ c }}</span> }
+              </div>
+            }
+
+            <div class="meta-cols">
+              @if (m.production_companies.length) {
+                <div>
+                  <h3 class="modal-h">Estudios</h3>
+                  <p class="meta-list">{{ companyNames(m) }}</p>
+                </div>
+              }
+              @if (m.production_countries.length) {
+                <div>
+                  <h3 class="modal-h">Países</h3>
+                  <p class="meta-list">
+                    @for (c of m.production_countries; track c.iso_3166_1) { <span>{{ flag(c.iso_3166_1) }} {{ c.name }}</span> }
+                  </p>
+                </div>
+              }
+            </div>
+
+            @if (m.keywords.length) {
+              <h3 class="modal-h">Palabras clave</h3>
+              <div class="chips">
+                @for (k of m.keywords.slice(0, 14); track k) { <button class="chip chip-sm" (click)="filterFromModal('keyword', k)">#{{ k }}</button> }
+              </div>
+            }
+
+            <div class="modal-actions">
+              @if (m.homepage) {
+                <a class="btn btn-primary" [href]="m.homepage" target="_blank" rel="noopener">Sitio oficial ↗</a>
+              }
+              @if (api.username()) {
+                <button class="btn" (click)="openEditor(m)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  Editar
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </boneyard-skeleton>
+    </div>
+  </div>
+}
+
+<!-- ===================== ADMIN EDITOR ===================== -->
+@if (editorOpen()) {
+  <app-movie-editor [movie]="editorMovie()" [countries]="countryStats()"
+    (saved)="onSaved($event)" (deleted)="onDeleted($event)" (closed)="closeEditor()" />
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.bad]="t.kind === 'bad'" role="status">
+    <span class="toast-dot"></span>{{ t.text }}
+  </div>
+}

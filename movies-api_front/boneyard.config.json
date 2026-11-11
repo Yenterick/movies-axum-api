@@ -1,0 +1,8 @@
+{
+  "breakpoints": [375, 768, 1280],
+  "out": "./src/bones",
+  "wait": 2500,
+  "darkColor": "#1a1724",
+  "color": "#1a1724",
+  "animate": "solid"
+}

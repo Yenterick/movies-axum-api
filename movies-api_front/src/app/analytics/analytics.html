@@ -1,0 +1,301 @@
+<section class="analytics shell" id="analytics">
+  <header class="analytics-head">
+    <p class="eyebrow">Analítica en vivo</p>
+    <h2 class="section-title">Un siglo de cine, <span class="gradient-text">en números</span></h2>
+    <p class="section-lede">Cada gráfico consulta en vivo los endpoints <code class="mono">/analytics</code> de la API. Haz clic en un género, un país o una película para abrirlo en el catálogo.</p>
+  </header>
+
+  @if (error()) {
+    <div class="card card-pad analytics-error">
+      <p>No se pudieron cargar las estadísticas. ¿Está corriendo la API en <code class="mono">localhost:3000</code>?</p>
+      <button class="btn btn-sm" (click)="loadBase()">Reintentar</button>
+    </div>
+  }
+
+  <!-- ===== KPI strip ===== -->
+  <boneyard-skeleton name="analytics-kpis" [loading]="baseLoading()" [transition]="true">
+    <div fallback class="kpi-grid">
+      @for (i of [1,2,3,4,5,6]; track i) { <div class="bone-fallback" style="height:118px"></div> }
+    </div>
+    @if (overview(); as o) {
+      <div class="kpi-grid">
+        <div class="card kpi kpi-hero">
+          <span class="kpi-label">Taquilla total</span>
+          <strong class="kpi-value gradient-text">{{ money(o.total_revenue) }}</strong>
+          <span class="kpi-foot">de {{ money(o.total_budget) }} invertidos</span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Películas</span>
+          <strong class="kpi-value">{{ o.total_movies.toLocaleString('es') }}</strong>
+          <span class="kpi-foot">{{ year(o.earliest_release) }} – {{ year(o.latest_release) }}</span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Calificación media</span>
+          <strong class="kpi-value">★ {{ rating(o.average_rating) }}</strong>
+          <span class="kpi-foot">{{ compact(o.total_votes) }} votos</span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">ROI mediano</span>
+          <strong class="kpi-value">{{ multiple(o.median_roi) }}</strong>
+          <span class="kpi-foot">taquilla / presupuesto</span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Rentables</span>
+          <strong class="kpi-value">{{ percent(o.profitable_share) }}</strong>
+          <span class="kpi-meter"><span [style.width.%]="(o.profitable_share ?? 0) * 100"></span></span>
+        </div>
+        <div class="card kpi">
+          <span class="kpi-label">Alcance</span>
+          <strong class="kpi-value">{{ o.country_count }} <small>países</small></strong>
+          <span class="kpi-foot">{{ o.language_count }} idiomas · {{ compact(o.company_count) }} estudios</span>
+        </div>
+      </div>
+    }
+  </boneyard-skeleton>
+
+  <div class="dash-grid">
+    <!-- ===== Timeline ===== -->
+    <article class="card card-pad span-2">
+      <div class="card-head">
+        <div>
+          <h3 class="card-title">Línea de tiempo</h3>
+          <p class="card-sub">
+            @if (peakYear(); as p) { Pico en <strong>{{ p.year }}</strong>: {{ yearDisplay(p) }} } @else { Estrenos por año }
+          </p>
+        </div>
+        <div class="head-controls">
+          <div class="segmented">
+            <button [class.active]="yearMetric() === 'movie_count'" (click)="yearMetric.set('movie_count')">Estrenos</button>
+            <button [class.active]="yearMetric() === 'total_revenue'" (click)="yearMetric.set('total_revenue')">Taquilla</button>
+            <button [class.active]="yearMetric() === 'average_rating'" (click)="yearMetric.set('average_rating')">Rating</button>
+          </div>
+          <div class="segmented">
+            <button [class.active]="yearFrom() === 1960" (click)="yearFrom.set(1960)">1960+</button>
+            <button [class.active]="yearFrom() === 1990" (click)="yearFrom.set(1990)">1990+</button>
+            <button [class.active]="yearFrom() === 0" (click)="yearFrom.set(0)">Todo</button>
+          </div>
+        </div>
+      </div>
+      <boneyard-skeleton name="analytics-timeline" [loading]="baseLoading()" [transition]="true">
+        <div fallback class="bone-fallback" style="height:260px"></div>
+        @if (!baseLoading()) {
+          <div class="timeline" (mouseleave)="hoverYear.set(null)">
+            <div class="timeline-grid"><span></span><span></span><span></span></div>
+            <div class="timeline-bars">
+              @for (y of visibleYears(); track y.year) {
+                <div class="tbar" tabindex="0" role="img" [class.dim]="hoverYear() && hoverYear() !== y"
+                  (mouseenter)="hoverYear.set(y)" (focus)="hoverYear.set(y)"
+                  [attr.aria-label]="y.year + ': ' + yearDisplay(y)">
+                  <span [style.height.%]="width(yearValue(y), yearMax())"></span>
+                </div>
+              }
+            </div>
+            @if (hoverYear(); as h) {
+              <div class="tooltip" [style.left.%]="(visibleYears().indexOf(h) + 0.5) / visibleYears().length * 100">
+                <strong>{{ h.year }}</strong>
+                <span>{{ h.movie_count }} estrenos</span>
+                <span>Taquilla {{ money(h.total_revenue) }}</span>
+                <span>★ {{ rating(h.average_rating) }} · {{ h.average_runtime ? (h.average_runtime | number:'1.0-0') : '—' }} min</span>
+              </div>
+            }
+            <div class="timeline-axis">
+              @for (t of yearTicks(); track t.year) { <span [style.left.%]="t.left">{{ t.year }}</span> }
+            </div>
+          </div>
+        }
+      </boneyard-skeleton>
+    </article>
+
+    <!-- ===== Genres ===== -->
+    <article class="card card-pad">
+      <div class="card-head">
+        <div>
+          <h3 class="card-title">Géneros</h3>
+          <p class="card-sub">Clic para filtrar el catálogo</p>
+        </div>
+        <div class="segmented">
+          <button [class.active]="genreMetric() === 'movie_count'" (click)="genreMetric.set('movie_count')">Cant.</button>
+          <button [class.active]="genreMetric() === 'average_rating'" (click)="genreMetric.set('average_rating')">Rating</button>
+          <button [class.active]="genreMetric() === 'median_roi'" (click)="genreMetric.set('median_roi')">ROI</button>
+          <button [class.active]="genreMetric() === 'total_revenue'" (click)="genreMetric.set('total_revenue')">$</button>
+        </div>
+      </div>
+      <boneyard-skeleton name="analytics-genres" [loading]="baseLoading()" [transition]="true">
+        <div fallback class="bone-fallback" style="height:420px"></div>
+        @if (!baseLoading()) {
+          <ul class="hbars scroll-list">
+            @for (g of sortedGenres(); track g.genre; let i = $index) {
+              <li>
+                <button class="hbar" (click)="genreSelected.emit(g.genre)">
+                  <span class="hbar-label">{{ genreLabel(g.genre) }}</span>
+                  <span class="hbar-track"><span class="hbar-fill" [style.width.%]="width(g[genreMetric()], genreMax())" [style.animation-delay.ms]="i * 30"></span></span>
+                  <span class="hbar-value mono">{{ genreDisplay(g) }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </boneyard-skeleton>
+    </article>
+
+    <!-- ===== Budget / runtime buckets ===== -->
+    <article class="card card-pad">
+      <div class="card-head">
+        <div>
+          <h3 class="card-title">¿Más dinero, mejor película?</h3>
+          <p class="card-sub">{{ bucketSource() === 'budget' ? 'Por tamaño de presupuesto' : 'Por duración en minutos' }}</p>
+        </div>
+        <div class="head-controls">
+          <div class="segmented">
+            <button [class.active]="bucketSource() === 'budget'" (click)="bucketSource.set('budget')">Presupuesto</button>
+            <button [class.active]="bucketSource() === 'runtime'" (click)="bucketSource.set('runtime')">Duración</button>
+          </div>
+          <div class="segmented">
+            <button [class.active]="bucketMetric() === 'median_roi'" (click)="bucketMetric.set('median_roi')">ROI</button>
+            <button [class.active]="bucketMetric() === 'average_rating'" (click)="bucketMetric.set('average_rating')">Rating</button>
+            <button [class.active]="bucketMetric() === 'profitable_share'" (click)="bucketMetric.set('profitable_share')">% rentable</button>
+          </div>
+        </div>
+      </div>
+      <boneyard-skeleton name="analytics-buckets" [loading]="baseLoading()" [transition]="true">
+        <div fallback class="bone-fallback" style="height:300px"></div>
+        @if (!baseLoading()) {
+          <div class="columns" (mouseleave)="hoverBucket.set(null)">
+            @for (b of buckets(); track b.label) {
+              <button class="column" (mouseenter)="hoverBucket.set(b)" (focus)="hoverBucket.set(b)" [class.dim]="hoverBucket() && hoverBucket() !== b">
+                <span class="column-value mono">{{ bucketDisplay(b) }}</span>
+                <span class="column-track"><span class="column-fill" [style.height.%]="width(b[bucketMetric()], bucketMax())"></span></span>
+                <span class="column-label">{{ b.label }}</span>
+              </button>
+            }
+          </div>
+          <p class="bucket-note">
+            @if (hoverBucket(); as h) {
+              <strong>{{ h.label }}</strong> · {{ h.movie_count }} películas · rating {{ rating(h.average_rating) }} · ROI {{ multiple(h.median_roi) }} · {{ percent(h.profitable_share) }} rentables
+            } @else {
+              Pasa el cursor sobre una columna para ver el detalle.
+            }
+          </p>
+        }
+      </boneyard-skeleton>
+    </article>
+
+    <!-- ===== Leaderboards ===== -->
+    <article class="card card-pad">
+      <div class="card-head">
+        <div>
+          <h3 class="card-title">Rankings</h3>
+          <p class="card-sub">
+            @switch (board()) {
+              @case ('grossing') { Mayor taquilla de la historia }
+              @case ('profit') { Mayor ganancia absoluta }
+              @case ('roi') { Mejor retorno (presupuesto ≥ $1M) }
+              @case ('rated') { Rating bayesiano (≥ 1000 votos) }
+            }
+          </p>
+        </div>
+        <select class="field field-sm" [value]="boardGenre()" (change)="setBoardGenre($any($event.target).value)" aria-label="Filtrar ranking por género">
+          <option value="">Todos los géneros</option>
+          @for (g of genres; track g) { <option [value]="g">{{ genreLabel(g) }}</option> }
+        </select>
+      </div>
+      <div class="segmented tabs">
+        <button [class.active]="board() === 'grossing'" (click)="setBoard('grossing')">Taquilla</button>
+        <button [class.active]="board() === 'profit'" (click)="setBoard('profit')">Ganancia</button>
+        <button [class.active]="board() === 'roi'" (click)="setBoard('roi')">ROI</button>
+        <button [class.active]="board() === 'rated'" (click)="setBoard('rated')">Rating</button>
+      </div>
+      <boneyard-skeleton name="analytics-board" [loading]="boardLoading()" [transition]="true">
+        <div fallback class="bone-fallback" style="height:400px"></div>
+        @if (!boardLoading()) {
+          <ol class="ranks">
+            @for (r of boardRows(); track r.id; let i = $index) {
+              <li>
+                <div class="rank clickable" role="button" tabindex="0" (click)="movieSelected.emit(r.id)" (keydown.enter)="movieSelected.emit(r.id)">
+                  <span class="rank-n mono" [class.top]="i < 3">{{ i + 1 }}</span>
+                  <span class="rank-thumb">
+                    @if (posters.posters()[r.id]; as url) { <img [src]="url" alt="" loading="lazy" (error)="posters.forget(r.id)" /> }
+                  </span>
+                  <span class="rank-main">
+                    <span class="rank-title">{{ r.title }} <small>{{ year(r.date) }}</small></span>
+                    <span class="rank-bar"><span [style.width.%]="width(r.value, boardMax())"></span></span>
+                    <span class="rank-detail">{{ r.detail }}</span>
+                  </span>
+                  <span class="rank-value mono">{{ r.display }}</span>
+                </div>
+              </li>
+            } @empty {
+              <li class="empty-row">Sin resultados para este filtro.</li>
+            }
+          </ol>
+        }
+      </boneyard-skeleton>
+    </article>
+
+    <!-- ===== Talent ===== -->
+    <article class="card card-pad">
+      <div class="card-head">
+        <div>
+          <h3 class="card-title">Talento</h3>
+          <p class="card-sub">Quién mueve la industria</p>
+        </div>
+        <div class="segmented">
+          <button [class.active]="talentSort() === 'revenue'" (click)="setTalentSort('revenue')">Taquilla</button>
+          <button [class.active]="talentSort() === 'rating'" (click)="setTalentSort('rating')">Rating</button>
+          <button [class.active]="talentSort() === 'movie_count'" (click)="setTalentSort('movie_count')">Películas</button>
+        </div>
+      </div>
+      <div class="segmented tabs">
+        <button [class.active]="talentKind() === 'directors'" (click)="setTalent('directors')">Directores</button>
+        <button [class.active]="talentKind() === 'actors'" (click)="setTalent('actors')">Actores</button>
+        <button [class.active]="talentKind() === 'companies'" (click)="setTalent('companies')">Estudios</button>
+      </div>
+      <boneyard-skeleton name="analytics-talent" [loading]="talentLoading()" [transition]="true">
+        <div fallback class="bone-fallback" style="height:400px"></div>
+        @if (!talentLoading()) {
+          <ol class="ranks">
+            @for (t of talent(); track t.id; let i = $index) {
+              <li class="rank static">
+                <span class="avatar" [attr.data-i]="i % 4">{{ t.name.charAt(0) }}</span>
+                <span class="rank-main">
+                  <span class="rank-title">{{ t.name }}</span>
+                  <span class="rank-bar"><span [style.width.%]="width(talentValue(t), talentMax())"></span></span>
+                  <span class="rank-detail">{{ t.movie_count }} películas · ★ {{ rating(t.average_rating) }} · {{ money(t.total_revenue) }}</span>
+                </span>
+                <span class="rank-value mono">{{ talentDisplay(t) }}</span>
+              </li>
+            } @empty {
+              <li class="empty-row">Sin resultados.</li>
+            }
+          </ol>
+        }
+      </boneyard-skeleton>
+    </article>
+
+    <!-- ===== Countries ===== -->
+    <article class="card card-pad span-2">
+      <div class="card-head">
+        <div>
+          <h3 class="card-title">Mapa de producción</h3>
+          <p class="card-sub">Países con más producciones · clic para filtrar</p>
+        </div>
+      </div>
+      <boneyard-skeleton name="analytics-countries" [loading]="baseLoading()" [transition]="true">
+        <div fallback class="bone-fallback" style="height:180px"></div>
+        @if (!baseLoading()) {
+          <div class="countries">
+            @for (c of countries(); track c.iso_3166_1) {
+              <button class="country" (click)="countrySelected.emit(c.iso_3166_1)">
+                <span class="country-flag">{{ flag(c.iso_3166_1) }}</span>
+                <span class="country-name">{{ c.name }}</span>
+                <span class="country-count mono">{{ c.movie_count.toLocaleString('es') }}</span>
+                <span class="country-bar"><span [style.width.%]="width(c.movie_count, countryMax())"></span></span>
+                <span class="country-meta">★ {{ rating(c.average_rating) }} · {{ money(c.total_revenue) }}</span>
+              </button>
+            }
+          </div>
+        }
+      </boneyard-skeleton>
+    </article>
+  </div>
+</section>
