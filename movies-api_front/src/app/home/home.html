@@ -1,30 +1,5 @@
 <!-- ===================== NAV ===================== -->
-<nav class="nav" [class.scrolled]="scrolled()">
-  <div class="shell nav-inner">
-    <a class="brand" routerLink="/" (click)="scrollTo('top')">
-      <span class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="6.8" r="1.6"/><circle cx="12" cy="17.2" r="1.6"/><circle cx="6.8" cy="12" r="1.6"/><circle cx="17.2" cy="12" r="1.6"/></svg>
-      </span>
-      <span>Cine<span class="gradient-text">Data</span></span>
-    </a>
-    <div class="nav-links">
-      <button (click)="scrollTo('analytics')">Analítica</button>
-      <button (click)="scrollTo('catalog')">Catálogo</button>
-    </div>
-    <div class="nav-actions">
-      @if (api.username(); as user) {
-        <button class="btn btn-sm btn-primary" (click)="openEditor(null)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
-          <span class="hide-sm">Nueva película</span>
-        </button>
-        <span class="user-pill" title="Sesión de administrador"><span class="user-dot">{{ user.charAt(0).toUpperCase() }}</span>{{ user }}</span>
-        <button class="btn btn-sm" (click)="logout()">Salir</button>
-      } @else {
-        <a class="btn btn-sm btn-primary" routerLink="/login">Iniciar sesión</a>
-      }
-    </div>
-  </div>
-</nav>
+<app-site-nav [canCreate]="true" (create)="openEditor(null)" />
 
 <!-- ===================== HERO ===================== -->
 <header class="hero" id="top">
@@ -136,7 +111,7 @@
           <select class="field" [value]="country()" (change)="setFilter('country', $any($event.target).value)">
             <option value="">Cualquiera</option>
             @for (c of countryStats(); track c.iso_3166_1) {
-              <option [value]="c.iso_3166_1" [selected]="c.iso_3166_1 === country()">{{ flag(c.iso_3166_1) }} {{ c.name }} ({{ c.movie_count }})</option>
+              <option [value]="c.iso_3166_1" [selected]="c.iso_3166_1 === country()">{{ flag(c.iso_3166_1) }} {{ countryName(c.iso_3166_1, c.name) }} ({{ c.movie_count }})</option>
             }
           </select>
         </label>
@@ -156,7 +131,7 @@
       @if (search()) { <button class="pill" (click)="clearSearch()">“{{ search() }}” <span>×</span></button> }
       @if (genre()) { <button class="pill" (click)="setGenre('')">{{ genreLabel(genre()) }} <span>×</span></button> }
       @if (language()) { <button class="pill" (click)="setFilter('language', '')">{{ languageName() }} <span>×</span></button> }
-      @if (country()) { <button class="pill" (click)="setFilter('country', '')">{{ flag(country()) }} {{ countryName() }} <span>×</span></button> }
+      @if (country()) { <button class="pill" (click)="setFilter('country', '')">{{ flag(country()) }} {{ activeCountryName() }} <span>×</span></button> }
       @if (keyword()) { <button class="pill" (click)="setFilter('keyword', '')">#{{ keyword() }} <span>×</span></button> }
       @if (activeFilterCount() > 1) { <button class="pill-clear" (click)="clearFilters()">Limpiar filtros</button> }
     </div>
@@ -249,11 +224,7 @@
   }
 </section>
 
-<footer class="footer shell">
-  <span class="brand"><span>Cine<span class="gradient-text">Data</span></span></span>
-  <span class="mono">Axum · PostgreSQL · Angular · three.js</span>
-  <a class="mono" href="http://localhost:3000/api/v1/docs" target="_blank" rel="noopener">API docs ↗</a>
-</footer>
+<app-site-footer />
 
 <!-- ===================== DETAIL MODAL ===================== -->
 @if (modalOpen()) {
@@ -344,7 +315,7 @@
                 <div>
                   <h3 class="modal-h">Países</h3>
                   <p class="meta-list">
-                    @for (c of m.production_countries; track c.iso_3166_1) { <span>{{ flag(c.iso_3166_1) }} {{ c.name }}</span> }
+                    @for (c of m.production_countries; track c.iso_3166_1) { <span>{{ flag(c.iso_3166_1) }} {{ countryName(c.iso_3166_1, c.name) }}</span> }
                   </p>
                 </div>
               }
@@ -366,6 +337,12 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                   Editar
                 </button>
+                <button class="btn btn-danger" [class.armed]="confirmDelete()" (click)="deleteSelected(m)" [disabled]="deleting()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                  {{ deleting() ? 'Eliminando…' : confirmDelete() ? '¿Seguro? Clic para confirmar' : 'Eliminar' }}
+                </button>
+              } @else {
+                <a class="btn btn-ghost" routerLink="/login">Inicia sesión para editar</a>
               }
             </div>
           </div>

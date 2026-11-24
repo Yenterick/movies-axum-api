@@ -65,7 +65,19 @@ pub struct MoviePatchRequest {
     pub title: Option<String>,
     pub vote_average: Option<f32>,
     pub vote_count: Option<u32>,
+    /// Send an empty string to remove the director.
     pub director: Option<String>,
+    /// Each list below replaces the movie's current one when present.
+    pub genres: Option<Vec<GenreRequest>>,
+    pub keywords: Option<Vec<String>>,
+    pub cast: Option<Vec<String>>,
+    pub production_companies: Option<Vec<ProductionCompanyRequest>>,
+    pub production_countries: Option<Vec<CountryRequest>>,
+    pub spoken_languages: Option<Vec<SpokenLanguageRequest>>,
+}
+
+fn convert_all<T, U: From<T>>(items: Option<Vec<T>>) -> Option<Vec<U>> {
+    items.map(|items| items.into_iter().map(Into::into).collect())
 }
 
 impl From<MoviePatchRequest> for MovieUpdate {
@@ -86,6 +98,12 @@ impl From<MoviePatchRequest> for MovieUpdate {
             vote_average: request.vote_average,
             vote_count: request.vote_count,
             director: request.director,
+            genres: convert_all(request.genres),
+            keywords: request.keywords,
+            cast: request.cast,
+            production_companies: convert_all(request.production_companies),
+            production_countries: convert_all(request.production_countries),
+            spoken_languages: convert_all(request.spoken_languages),
         }
     }
 }

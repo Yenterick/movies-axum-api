@@ -10,16 +10,17 @@ import {
 } from '../api.service';
 import { Analytics } from '../analytics/analytics';
 import { MovieEditor } from '../editor/movie-editor';
+import { SiteFooter, SiteNav } from '../layout/site-nav';
 import { PosterService } from '../poster.service';
 import { CinemaScene } from '../scene/cinema-scene';
-import { LANGUAGES, compact, flag, money, multiple, posterGradient, rating, year } from '../format';
+import { LANGUAGES, compact, countryName, flag, money, multiple, posterGradient, rating, year } from '../format';
 
 const PAGE_SIZES = [12, 24, 48];
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [SkeletonComponent, Analytics, CinemaScene, MovieEditor, RouterLink, DecimalPipe],
+  imports: [SkeletonComponent, Analytics, CinemaScene, MovieEditor, SiteNav, SiteFooter, RouterLink, DecimalPipe],
   templateUrl: './home.html',
   styleUrl: './home.css',
 })
@@ -44,6 +45,7 @@ export class Home implements OnInit, OnDestroy {
   readonly multiple = multiple;
   readonly year = year;
   readonly flag = flag;
+  readonly countryName = countryName;
   readonly posterGradient = posterGradient;
   readonly skeletonCards = Array.from({ length: 12 }, (_, i) => i);
   /** Capture each card as poster block + two text lines; the overlays inside the poster are noise. */
@@ -73,6 +75,8 @@ export class Home implements OnInit, OnDestroy {
   selected = signal<Movie | null>(null);
   modalOpen = signal(false);
   modalLoading = signal(false);
+  confirmDelete = signal(false);
+  deleting = signal(false);
 
   // ---- Admin editor ----
   editorOpen = signal(false);
@@ -80,7 +84,6 @@ export class Home implements OnInit, OnDestroy {
   toast = signal<{ text: string; kind: 'ok' | 'bad' } | null>(null);
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  scrolled = signal(false);
   /** Results height frozen while a page loads, so the document doesn't shrink and yank the scroll position. */
   resultsMinHeight = signal<number | null>(null);
   heroStats = signal({ movies: 0, revenue: 0, votes: 0 });
@@ -130,7 +133,10 @@ export class Home implements OnInit, OnDestroy {
     return total !== null ? `${start}–${end} de ${total.toLocaleString('es')}` : `${start}–${end}`;
   });
 
-  countryName = computed(() => this.countryStats().find((c) => c.iso_3166_1 === this.country())?.name ?? this.country());
+  activeCountryName = computed(() => {
+    const c = this.countryStats().find((c) => c.iso_3166_1 === this.country());
+    return countryName(this.country(), c?.name ?? this.country());
+  });
   languageName = computed(() => this.languages.find((l) => l.code === this.language())?.name ?? this.language());
 
   private search$ = new Subject<string>();
@@ -168,6 +174,10 @@ export class Home implements OnInit, OnDestroy {
     this.fetch(false);
     const movieId = Number(q.get('movie'));
     if (movieId) this.openMovie(movieId);
+
+    // Arriving from another page's nav (e.g. /#catalog): wait for the sections to render.
+    const fragment = this.route.snapshot.fragment;
+    if (this.isBrowser && fragment) setTimeout(() => this.scrollTo(fragment), 150);
   }
 
   ngOnDestroy(): void {
@@ -314,6 +324,7 @@ export class Home implements OnInit, OnDestroy {
   // ---------- Modal ----------
 
   openMovie(id: number, preview?: Movie): void {
+    this.confirmDelete.set(false);
     this.selected.set(preview ?? null);
     this.modalOpen.set(true);
     this.modalLoading.set(true);
@@ -395,12 +406,26 @@ export class Home implements OnInit, OnDestroy {
     this.openMovie(movie.id, movie);
   }
 
-  onDeleted(id: number): void {
-    const title = this.editorMovie()?.title ?? `#${id}`;
+  onDeleted(id: number, title = this.editorMovie()?.title ?? `#${id}`): void {
     this.closeEditor();
     this.closeModal();
     this.showToast(`“${title}” eliminada`, 'bad');
     this.fetch(false);
+  }
+
+  /** Two-step delete straight from the detail modal: first click arms, second confirms. */
+  deleteSelected(movie: Movie): void {
+    if (this.deleting()) return;
+    if (!this.confirmDelete()) { this.confirmDelete.set(true); return; }
+    this.deleting.set(true);
+    this.api.deleteMovie(movie.id).subscribe({
+      next: () => { this.deleting.set(false); this.confirmDelete.set(false); this.onDeleted(movie.id, movie.title); },
+      error: (err) => {
+        this.deleting.set(false);
+        this.confirmDelete.set(false);
+        this.showToast(err.status === 401 ? 'Tu sesión expiró. Vuelve a iniciar sesión.' : `No se pudo eliminar (${err.status || 'sin conexión'}).`, 'bad');
+      },
+    });
   }
 
   private showToast(text: string, kind: 'ok' | 'bad'): void {
@@ -413,18 +438,7 @@ export class Home implements OnInit, OnDestroy {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   }
 
-  // ---------- Session ----------
-
-  logout(): void {
-    this.api.logout();
-  }
-
   // ---------- Global interactions ----------
-
-  @HostListener('window:scroll')
-  onScroll(): void {
-    this.scrolled.set(window.scrollY > 24);
-  }
 
   @HostListener('document:keydown', ['$event'])
   onKey(e: KeyboardEvent): void {

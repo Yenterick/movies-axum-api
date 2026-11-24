@@ -1,0 +1,74 @@
+<app-site-nav />
+
+<header class="about-hero shell">
+  <p class="eyebrow">Sobre nosotros</p>
+  <h1 class="about-title">Cuatro personas,<br>una pregunta: <span class="gradient-text">¿qué hace que una película triunfe?</span></h1>
+  <p class="about-lede">
+    CineData nació como un proyecto académico de Ingeniería de Sistemas. Queríamos ir más allá de un catálogo:
+    tomar {{ overview() ? overview()!.total_movies.toLocaleString('es') : 'miles de' }} películas y contar, con datos, la historia del dinero,
+    la crítica y el talento que hay detrás de cada estreno.
+  </p>
+</header>
+
+<!-- ===================== TEAM ===================== -->
+<section class="shell section">
+  <div class="section-head">
+    <p class="eyebrow">El equipo</p>
+    <h2 class="section-title">Quiénes <span class="gradient-text">lo construimos</span></h2>
+  </div>
+
+  <ul class="team">
+    @for (m of team; track m.github) {
+      <li>
+        <a class="member card" [href]="'https://github.com/' + m.github" target="_blank" rel="noopener">
+          <span class="member-name">{{ m.name }}</span>
+          <span class="member-gh mono">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>
+            github.com/{{ m.github }} ↗
+          </span>
+        </a>
+      </li>
+    }
+  </ul>
+</section>
+
+<!-- ===================== PROJECT ===================== -->
+<section class="shell section">
+  <div class="section-head">
+    <p class="eyebrow">El proyecto</p>
+    <h2 class="section-title">De un CSV a una <span class="gradient-text">historia en vivo</span></h2>
+  </div>
+
+  <div class="pillars">
+    <article class="card card-pad pillar">
+      <span class="pillar-n mono">01</span>
+      <h3>Los datos</h3>
+      <p>Partimos del dataset de TMDB: películas con su presupuesto, taquilla, votos, géneros, reparto y equipo. Un script los normaliza en 14 tablas relacionales de PostgreSQL.</p>
+    </article>
+    <article class="card card-pad pillar">
+      <span class="pillar-n mono">02</span>
+      <h3>La API</h3>
+      <p>Un servicio REST en Rust con Axum y arquitectura hexagonal: CRUD completo de películas protegido con JWT, filtros, paginación y endpoints de analítica calculados en SQL.</p>
+    </article>
+    <article class="card card-pad pillar">
+      <span class="pillar-n mono">03</span>
+      <h3>La historia</h3>
+      <p>Este frontend en Angular convierte cada consulta en un relato: cada gráfico trae su conclusión, y esa conclusión se recalcula cuando cambias el filtro o editas el catálogo.</p>
+    </article>
+  </div>
+
+  <div class="flow card card-pad" aria-label="Arquitectura: Angular consulta a la API Axum, que lee y escribe en PostgreSQL">
+    <div class="flow-node"><strong>Angular</strong><span>Catálogo · Analítica · Gestión</span></div>
+    <div class="flow-arrow"><span class="mono">HTTP + JWT</span></div>
+    <div class="flow-node accent"><strong>Axum API</strong><span>Rust · hexagonal</span></div>
+    <div class="flow-arrow"><span class="mono">sqlx</span></div>
+    <div class="flow-node"><strong>PostgreSQL</strong><span>{{ overview() ? compact(overview()!.total_movies) + ' películas' : 'Docker' }}</span></div>
+  </div>
+
+  <div class="cta">
+    <a class="btn btn-primary" routerLink="/">Explorar el catálogo</a>
+    <a class="btn" href="https://github.com/Yenterick/movies-axum-api" target="_blank" rel="noopener">Ver el código en GitHub ↗</a>
+  </div>
+</section>
+
+<app-site-footer />

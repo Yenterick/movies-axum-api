@@ -111,7 +111,15 @@ pub struct MovieUpdate {
     pub title: Option<String>,
     pub vote_average: Option<f32>,
     pub vote_count: Option<u32>,
+    /// An empty string removes the director.
     pub director: Option<String>,
+    // Relations: `Some` replaces the whole list, `None` leaves it untouched.
+    pub genres: Option<Vec<Genre>>,
+    pub keywords: Option<Vec<String>>,
+    pub cast: Option<Vec<String>>,
+    pub production_companies: Option<Vec<ProductionCompany>>,
+    pub production_countries: Option<Vec<Country>>,
+    pub spoken_languages: Option<Vec<SpokenLanguage>>,
 }
 
 impl MovieUpdate {
@@ -159,7 +167,25 @@ impl MovieUpdate {
             movie.vote_count = vote_count;
         }
         if let Some(director) = self.director {
-            movie.director = Some(director);
+            movie.director = Some(director).filter(|name| !name.trim().is_empty());
+        }
+        if let Some(genres) = self.genres {
+            movie.genres = genres;
+        }
+        if let Some(keywords) = self.keywords {
+            movie.keywords = keywords;
+        }
+        if let Some(cast) = self.cast {
+            movie.cast = cast;
+        }
+        if let Some(production_companies) = self.production_companies {
+            movie.production_companies = production_companies;
+        }
+        if let Some(production_countries) = self.production_countries {
+            movie.production_countries = production_countries;
+        }
+        if let Some(spoken_languages) = self.spoken_languages {
+            movie.spoken_languages = spoken_languages;
         }
     }
 }

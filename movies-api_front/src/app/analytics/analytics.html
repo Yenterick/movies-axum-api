@@ -2,7 +2,7 @@
   <header class="analytics-head">
     <p class="eyebrow">Analítica en vivo</p>
     <h2 class="section-title">Un siglo de cine, <span class="gradient-text">en números</span></h2>
-    <p class="section-lede">Cada gráfico consulta en vivo los endpoints <code class="mono">/analytics</code> de la API. Haz clic en un género, un país o una película para abrirlo en el catálogo.</p>
+    <p class="section-lede">Una historia en seis capítulos, contada con datos que se consultan en vivo a los endpoints <code class="mono">/analytics</code> de la API. Cada gráfico trae su conclusión, y esta cambia cuando cambias la métrica. Haz clic en un género, un país o una película para abrirlo en el catálogo.</p>
   </header>
 
   @if (error()) {
@@ -52,15 +52,18 @@
       </div>
     }
   </boneyard-skeleton>
+  @if (!baseLoading()) { <app-story class="overview-story" [parts]="overviewStory()" /> }
 
   <div class="dash-grid">
     <!-- ===== Timeline ===== -->
     <article class="card card-pad span-2">
       <div class="card-head">
         <div>
-          <h3 class="card-title">Línea de tiempo</h3>
+          <span class="chapter">Capítulo 1 · Cuándo</span>
+          <h3 class="card-title">{{ timelineStory()?.title ?? 'Línea de tiempo' }}</h3>
           <p class="card-sub">
-            @if (peakYear(); as p) { Pico en <strong>{{ p.year }}</strong>: {{ yearDisplay(p) }} } @else { Estrenos por año }
+            {{ yearMetric() === 'movie_count' ? 'Estrenos' : yearMetric() === 'total_revenue' ? 'Taquilla' : 'Calificación media' }} por año
+            @if (peakYear(); as p) { · pico en <strong>{{ p.year }}</strong>: {{ yearDisplay(p) }} }
           </p>
         </div>
         <div class="head-controls">
@@ -83,10 +86,11 @@
             <div class="timeline-grid"><span></span><span></span><span></span></div>
             <div class="timeline-bars">
               @for (y of visibleYears(); track y.year) {
-                <div class="tbar" tabindex="0" role="img" [class.dim]="hoverYear() && hoverYear() !== y"
+                <div class="tbar" tabindex="0" role="img" [class.dim]="hoverYear() && hoverYear() !== y" [class.peak]="peakYear() === y"
                   (mouseenter)="hoverYear.set(y)" (focus)="hoverYear.set(y)"
                   [attr.aria-label]="y.year + ': ' + yearDisplay(y)">
                   <span [style.height.%]="width(yearValue(y), yearMax())"></span>
+                  @if (peakYear() === y && !hoverYear()) { <i class="peak-mark mono" [style.bottom.%]="width(yearValue(y), yearMax())">{{ y.year }}</i> }
                 </div>
               }
             </div>
@@ -102,6 +106,7 @@
               @for (t of yearTicks(); track t.year) { <span [style.left.%]="t.left">{{ t.year }}</span> }
             </div>
           </div>
+          <app-story [parts]="timelineStory()?.parts ?? []" />
         }
       </boneyard-skeleton>
     </article>
@@ -110,8 +115,9 @@
     <article class="card card-pad">
       <div class="card-head">
         <div>
-          <h3 class="card-title">Géneros</h3>
-          <p class="card-sub">Clic para filtrar el catálogo</p>
+          <span class="chapter">Capítulo 2 · Qué</span>
+          <h3 class="card-title">{{ genreStory()?.title ?? 'Géneros' }}</h3>
+          <p class="card-sub">Géneros por {{ genreMetric() === 'movie_count' ? 'cantidad de películas' : genreMetric() === 'average_rating' ? 'calificación media' : genreMetric() === 'median_roi' ? 'retorno mediano' : 'taquilla total' }} · clic para filtrar</p>
         </div>
         <div class="segmented">
           <button [class.active]="genreMetric() === 'movie_count'" (click)="genreMetric.set('movie_count')">Cant.</button>
@@ -134,6 +140,7 @@
               </li>
             }
           </ul>
+          <app-story [parts]="genreStory()?.parts ?? []" />
         }
       </boneyard-skeleton>
     </article>
@@ -142,8 +149,9 @@
     <article class="card card-pad">
       <div class="card-head">
         <div>
-          <h3 class="card-title">¿Más dinero, mejor película?</h3>
-          <p class="card-sub">{{ bucketSource() === 'budget' ? 'Por tamaño de presupuesto' : 'Por duración en minutos' }}</p>
+          <span class="chapter">Capítulo 3 · Cuánto</span>
+          <h3 class="card-title">{{ bucketStory()?.title ?? '¿Más dinero, mejor película?' }}</h3>
+          <p class="card-sub">{{ bucketSource() === 'budget' ? '¿Más dinero, mejor película? Por tamaño de presupuesto' : '¿Importa la duración? Por minutos' }}</p>
         </div>
         <div class="head-controls">
           <div class="segmented">
@@ -165,17 +173,18 @@
               <button class="column" (mouseenter)="hoverBucket.set(b)" (focus)="hoverBucket.set(b)" [class.dim]="hoverBucket() && hoverBucket() !== b">
                 <span class="column-value mono">{{ bucketDisplay(b) }}</span>
                 <span class="column-track"><span class="column-fill" [style.height.%]="width(b[bucketMetric()], bucketMax())"></span></span>
-                <span class="column-label">{{ b.label }}</span>
+                <span class="column-label">{{ bucketLabel(b.label) }}</span>
               </button>
             }
           </div>
           <p class="bucket-note">
             @if (hoverBucket(); as h) {
-              <strong>{{ h.label }}</strong> · {{ h.movie_count }} películas · rating {{ rating(h.average_rating) }} · ROI {{ multiple(h.median_roi) }} · {{ percent(h.profitable_share) }} rentables
+              <strong>{{ bucketLabel(h.label) }}</strong> · {{ h.movie_count }} películas · rating {{ rating(h.average_rating) }} · ROI {{ multiple(h.median_roi) }} · {{ percent(h.profitable_share) }} rentables
             } @else {
               Pasa el cursor sobre una columna para ver el detalle.
             }
           </p>
+          <app-story [parts]="bucketStory()?.parts ?? []" />
         }
       </boneyard-skeleton>
     </article>
@@ -184,7 +193,8 @@
     <article class="card card-pad">
       <div class="card-head">
         <div>
-          <h3 class="card-title">Rankings</h3>
+          <span class="chapter">Capítulo 4 · Los éxitos</span>
+          <h3 class="card-title">{{ boardStory()?.title ?? 'Rankings' }}</h3>
           <p class="card-sub">
             @switch (board()) {
               @case ('grossing') { Mayor taquilla de la historia }
@@ -228,6 +238,7 @@
               <li class="empty-row">Sin resultados para este filtro.</li>
             }
           </ol>
+          <app-story [parts]="boardStory()?.parts ?? []" />
         }
       </boneyard-skeleton>
     </article>
@@ -236,8 +247,9 @@
     <article class="card card-pad">
       <div class="card-head">
         <div>
-          <h3 class="card-title">Talento</h3>
-          <p class="card-sub">Quién mueve la industria</p>
+          <span class="chapter">Capítulo 5 · Quién</span>
+          <h3 class="card-title">{{ talentStory()?.title ?? 'Talento' }}</h3>
+          <p class="card-sub">Quién mueve la industria · mínimo {{ talentSort() === 'rating' ? 6 : 3 }} películas</p>
         </div>
         <div class="segmented">
           <button [class.active]="talentSort() === 'revenue'" (click)="setTalentSort('revenue')">Taquilla</button>
@@ -268,6 +280,7 @@
               <li class="empty-row">Sin resultados.</li>
             }
           </ol>
+          <app-story [parts]="talentStory()?.parts ?? []" />
         }
       </boneyard-skeleton>
     </article>
@@ -276,8 +289,9 @@
     <article class="card card-pad span-2">
       <div class="card-head">
         <div>
-          <h3 class="card-title">Mapa de producción</h3>
-          <p class="card-sub">Países con más producciones · clic para filtrar</p>
+          <span class="chapter">Capítulo 6 · Dónde</span>
+          <h3 class="card-title">{{ countryStory()?.title ?? 'Mapa de producción' }}</h3>
+          <p class="card-sub">Los {{ countries().length }} países con más producciones · clic para filtrar</p>
         </div>
       </div>
       <boneyard-skeleton name="analytics-countries" [loading]="baseLoading()" [transition]="true">
@@ -287,15 +301,30 @@
             @for (c of countries(); track c.iso_3166_1) {
               <button class="country" (click)="countrySelected.emit(c.iso_3166_1)">
                 <span class="country-flag">{{ flag(c.iso_3166_1) }}</span>
-                <span class="country-name">{{ c.name }}</span>
+                <span class="country-name">{{ countryName(c.iso_3166_1, c.name) }}</span>
                 <span class="country-count mono">{{ c.movie_count.toLocaleString('es') }}</span>
                 <span class="country-bar"><span [style.width.%]="width(c.movie_count, countryMax())"></span></span>
                 <span class="country-meta">★ {{ rating(c.average_rating) }} · {{ money(c.total_revenue) }}</span>
               </button>
             }
           </div>
+          <app-story [parts]="countryStory()?.parts ?? []" />
         }
       </boneyard-skeleton>
     </article>
+
+    <!-- ===== Epilogue ===== -->
+    @if (!baseLoading() && takeaways().length) {
+      <article class="card card-pad span-2 epilogue">
+        <span class="chapter">Epílogo</span>
+        <h3 class="card-title">Lo que cuentan los datos</h3>
+        <ol class="takeaways">
+          @for (t of takeaways(); track $index; let i = $index) {
+            <li><span class="mono">{{ (i + 1).toString().padStart(2, '0') }}</span>{{ t }}</li>
+          }
+        </ol>
+        <p class="card-sub">Las conclusiones se recalculan con cada filtro que eliges arriba y con cada película que se crea, edita o elimina en el catálogo.</p>
+      </article>
+    }
   </div>
 </section>

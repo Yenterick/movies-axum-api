@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
+use sqlx::{FromRow, PgConnection, PgPool, Postgres, QueryBuilder};
 
 use crate::domain::entities::movie::{
     Country, CrewMember, Gender, Genre, Movie, MovieStatus, ProductionCompany, SpokenLanguage,
@@ -326,136 +326,12 @@ impl MovieRepository for PostgresMovieRepository {
 
         let movie_id = row.id;
 
-        for genre in &movie.genres {
-            let genre_id = sqlx::query_scalar::<_, i32>(
-                "INSERT INTO genres (name) VALUES ($1) \
-                 ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name \
-                 RETURNING id",
-            )
-            .bind(genre_to_str(*genre))
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_error)?;
-
-            sqlx::query(
-                "INSERT INTO movie_genres (movie_id, genre_id) VALUES ($1, $2) \
-                 ON CONFLICT DO NOTHING",
-            )
-            .bind(movie_id)
-            .bind(genre_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-        }
-
-        for keyword in &movie.keywords {
-            let keyword_id = sqlx::query_scalar::<_, i32>(
-                "INSERT INTO keywords (name) VALUES ($1) \
-                 ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name \
-                 RETURNING id",
-            )
-            .bind(keyword)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(db_error)?;
-
-            sqlx::query(
-                "INSERT INTO movie_keywords (movie_id, keyword_id) VALUES ($1, $2) \
-                 ON CONFLICT DO NOTHING",
-            )
-            .bind(movie_id)
-            .bind(keyword_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-        }
-
-        for production_company in &movie.production_companies {
-            sqlx::query(
-                "INSERT INTO production_companies (id, name) VALUES ($1, $2) \
-                 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
-            )
-            .bind(production_company.id as i64)
-            .bind(&production_company.name)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-
-            sqlx::query(
-                "INSERT INTO movie_production_companies (movie_id, company_id) VALUES ($1, $2) \
-                 ON CONFLICT DO NOTHING",
-            )
-            .bind(movie_id)
-            .bind(production_company.id as i64)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-        }
-
-        for production_country in &movie.production_countries {
-            sqlx::query(
-                "INSERT INTO production_countries (iso_3166_1, name) VALUES ($1, $2) \
-                 ON CONFLICT (iso_3166_1) DO UPDATE SET name = EXCLUDED.name",
-            )
-            .bind(&production_country.iso_3166_1)
-            .bind(&production_country.name)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-
-            sqlx::query(
-                "INSERT INTO movie_production_countries (movie_id, country_iso) VALUES ($1, $2) \
-                 ON CONFLICT DO NOTHING",
-            )
-            .bind(movie_id)
-            .bind(&production_country.iso_3166_1)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-        }
-
-        for spoken_language in &movie.spoken_languages {
-            sqlx::query(
-                "INSERT INTO spoken_languages (iso_639_1, name) VALUES ($1, $2) \
-                 ON CONFLICT (iso_639_1) DO UPDATE SET name = EXCLUDED.name",
-            )
-            .bind(&spoken_language.iso_639_1)
-            .bind(&spoken_language.name)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-
-            sqlx::query(
-                "INSERT INTO movie_spoken_languages (movie_id, language_iso) VALUES ($1, $2) \
-                 ON CONFLICT DO NOTHING",
-            )
-            .bind(movie_id)
-            .bind(&spoken_language.iso_639_1)
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-        }
-
-        for cast_member in &movie.cast {
-            let person_id =
-                sqlx::query_scalar::<_, i64>("SELECT id FROM people WHERE name = $1 LIMIT 1")
-                    .bind(cast_member)
-                    .fetch_optional(&mut *tx)
-                    .await
-                    .map_err(db_error)?;
-
-            if let Some(person_id) = person_id {
-                sqlx::query(
-                    "INSERT INTO movie_cast (movie_id, person_id) VALUES ($1, $2) \
-                     ON CONFLICT DO NOTHING",
-                )
-                .bind(movie_id)
-                .bind(person_id)
-                .execute(&mut *tx)
-                .await
-                .map_err(db_error)?;
-            }
-        }
+        replace_genres(&mut tx, movie_id, &movie.genres).await?;
+        replace_keywords(&mut tx, movie_id, &movie.keywords).await?;
+        replace_companies(&mut tx, movie_id, &movie.production_companies).await?;
+        replace_countries(&mut tx, movie_id, &movie.production_countries).await?;
+        replace_languages(&mut tx, movie_id, &movie.spoken_languages).await?;
+        replace_cast(&mut tx, movie_id, &movie.cast).await?;
 
         for crew_member in &movie.crew {
             sqlx::query(
@@ -486,23 +362,28 @@ impl MovieRepository for PostgresMovieRepository {
             .map_err(db_error)?;
         }
 
+        // A director given without a matching crew entry (the usual case for the admin form)
+        // still has to land in movie_crew, which is where reads look for it.
+        let crew_has_director = movie
+            .crew
+            .iter()
+            .any(|member| member.job.eq_ignore_ascii_case("director"));
+        if !crew_has_director && let Some(director) = &movie.director {
+            replace_director(&mut tx, movie_id, director).await?;
+        }
+
         tx.commit().await.map_err(db_error)?;
 
-        Ok(assemble_movie(
-            row,
-            movie.genres,
-            movie.keywords,
-            movie.production_companies,
-            movie.production_countries,
-            movie.spoken_languages,
-            movie.cast,
-            movie.crew,
-            movie.director,
-        ))
+        // Re-read so the response reflects what was actually stored.
+        self.find_by_id(movie_id as u32)
+            .await?
+            .ok_or(MovieError::NotFound(movie_id as u32))
     }
 
     async fn update(&self, id: u32, update: MovieUpdate) -> Result<Movie, MovieError> {
-        let sql = format!(
+        let mut tx = self.pool.begin().await.map_err(db_error)?;
+
+        let movie_id = sqlx::query_scalar::<_, i64>(
             "UPDATE movies SET \
                 budget = COALESCE($2, budget), \
                 homepage = COALESCE($3, homepage), \
@@ -519,35 +400,53 @@ impl MovieRepository for PostgresMovieRepository {
                 vote_average = COALESCE($14, vote_average), \
                 vote_count = COALESCE($15, vote_count) \
              WHERE id = $1 \
-             RETURNING {MOVIE_COLUMNS}"
-        );
+             RETURNING id",
+        )
+        .bind(id as i64)
+        .bind(update.budget.map(|value| value as i64))
+        .bind(update.homepage)
+        .bind(update.original_language)
+        .bind(update.original_title)
+        .bind(update.overview)
+        .bind(update.popularity.map(|value| value as f64))
+        .bind(update.release_date)
+        .bind(update.revenue.map(|value| value as i64))
+        .bind(update.runtime.map(|value| value as f64))
+        .bind(update.status.map(status_to_str))
+        .bind(update.tagline)
+        .bind(update.title)
+        .bind(update.vote_average.map(|value| value as f64))
+        .bind(update.vote_count.map(|value| value as i64))
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?
+        .ok_or(MovieError::NotFound(id))?;
 
-        let row = sqlx::query_as::<_, MovieRow>(sqlx::AssertSqlSafe(sql))
-            .bind(id as i64)
-            .bind(update.budget.map(|value| value as i64))
-            .bind(update.homepage)
-            .bind(update.original_language)
-            .bind(update.original_title)
-            .bind(update.overview)
-            .bind(update.popularity.map(|value| value as f64))
-            .bind(update.release_date)
-            .bind(update.revenue.map(|value| value as i64))
-            .bind(update.runtime.map(|value| value as f64))
-            .bind(update.status.map(status_to_str))
-            .bind(update.tagline)
-            .bind(update.title)
-            .bind(update.vote_average.map(|value| value as f64))
-            .bind(update.vote_count.map(|value| value as i64))
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(db_error)?
-            .ok_or(MovieError::NotFound(id))?;
+        if let Some(genres) = &update.genres {
+            replace_genres(&mut tx, movie_id, genres).await?;
+        }
+        if let Some(keywords) = &update.keywords {
+            replace_keywords(&mut tx, movie_id, keywords).await?;
+        }
+        if let Some(companies) = &update.production_companies {
+            replace_companies(&mut tx, movie_id, companies).await?;
+        }
+        if let Some(countries) = &update.production_countries {
+            replace_countries(&mut tx, movie_id, countries).await?;
+        }
+        if let Some(languages) = &update.spoken_languages {
+            replace_languages(&mut tx, movie_id, languages).await?;
+        }
+        if let Some(cast) = &update.cast {
+            replace_cast(&mut tx, movie_id, cast).await?;
+        }
+        if let Some(director) = &update.director {
+            replace_director(&mut tx, movie_id, director).await?;
+        }
 
-        self.hydrate(vec![row])
-            .await?
-            .into_iter()
-            .next()
-            .ok_or(MovieError::NotFound(id))
+        tx.commit().await.map_err(db_error)?;
+
+        self.find_by_id(id).await?.ok_or(MovieError::NotFound(id))
     }
 
     async fn delete(&self, id: u32) -> Result<(), MovieError> {
@@ -563,6 +462,279 @@ impl MovieRepository for PostgresMovieRepository {
 
         Ok(())
     }
+}
+
+// ---------- Relation writers ----------
+// Each one replaces a movie's links for one relation, upserting the related rows it needs.
+// They run inside the caller's transaction so a failed write never leaves half a movie.
+
+async fn replace_genres(
+    conn: &mut PgConnection,
+    movie_id: i64,
+    genres: &[Genre],
+) -> Result<(), MovieError> {
+    sqlx::query("DELETE FROM movie_genres WHERE movie_id = $1")
+        .bind(movie_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    for genre in genres {
+        let genre_id = sqlx::query_scalar::<_, i32>(
+            "INSERT INTO genres (name) VALUES ($1) \
+             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name \
+             RETURNING id",
+        )
+        .bind(genre_to_str(*genre))
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+        sqlx::query(
+            "INSERT INTO movie_genres (movie_id, genre_id) VALUES ($1, $2) \
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(movie_id)
+        .bind(genre_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+async fn replace_keywords(
+    conn: &mut PgConnection,
+    movie_id: i64,
+    keywords: &[String],
+) -> Result<(), MovieError> {
+    sqlx::query("DELETE FROM movie_keywords WHERE movie_id = $1")
+        .bind(movie_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    for keyword in keywords.iter().map(|k| k.trim()).filter(|k| !k.is_empty()) {
+        let keyword_id = sqlx::query_scalar::<_, i32>(
+            "INSERT INTO keywords (name) VALUES ($1) \
+             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name \
+             RETURNING id",
+        )
+        .bind(keyword)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+        sqlx::query(
+            "INSERT INTO movie_keywords (movie_id, keyword_id) VALUES ($1, $2) \
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(movie_id)
+        .bind(keyword_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+async fn replace_companies(
+    conn: &mut PgConnection,
+    movie_id: i64,
+    companies: &[ProductionCompany],
+) -> Result<(), MovieError> {
+    sqlx::query("DELETE FROM movie_production_companies WHERE movie_id = $1")
+        .bind(movie_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    for company in companies {
+        sqlx::query(
+            "INSERT INTO production_companies (id, name) VALUES ($1, $2) \
+             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+        )
+        .bind(company.id as i64)
+        .bind(&company.name)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+        sqlx::query(
+            "INSERT INTO movie_production_companies (movie_id, company_id) VALUES ($1, $2) \
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(movie_id)
+        .bind(company.id as i64)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+async fn replace_countries(
+    conn: &mut PgConnection,
+    movie_id: i64,
+    countries: &[Country],
+) -> Result<(), MovieError> {
+    sqlx::query("DELETE FROM movie_production_countries WHERE movie_id = $1")
+        .bind(movie_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    for country in countries {
+        sqlx::query(
+            "INSERT INTO production_countries (iso_3166_1, name) VALUES ($1, $2) \
+             ON CONFLICT (iso_3166_1) DO UPDATE SET name = EXCLUDED.name",
+        )
+        .bind(&country.iso_3166_1)
+        .bind(&country.name)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+        sqlx::query(
+            "INSERT INTO movie_production_countries (movie_id, country_iso) VALUES ($1, $2) \
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(movie_id)
+        .bind(&country.iso_3166_1)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+async fn replace_languages(
+    conn: &mut PgConnection,
+    movie_id: i64,
+    languages: &[SpokenLanguage],
+) -> Result<(), MovieError> {
+    sqlx::query("DELETE FROM movie_spoken_languages WHERE movie_id = $1")
+        .bind(movie_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    for language in languages {
+        sqlx::query(
+            "INSERT INTO spoken_languages (iso_639_1, name) VALUES ($1, $2) \
+             ON CONFLICT (iso_639_1) DO UPDATE SET name = EXCLUDED.name",
+        )
+        .bind(&language.iso_639_1)
+        .bind(&language.name)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+        sqlx::query(
+            "INSERT INTO movie_spoken_languages (movie_id, language_iso) VALUES ($1, $2) \
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(movie_id)
+        .bind(&language.iso_639_1)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+async fn replace_cast(
+    conn: &mut PgConnection,
+    movie_id: i64,
+    cast: &[String],
+) -> Result<(), MovieError> {
+    sqlx::query("DELETE FROM movie_cast WHERE movie_id = $1")
+        .bind(movie_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    for name in cast.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
+        let person_id = find_or_create_person(conn, name).await?;
+        sqlx::query(
+            "INSERT INTO movie_cast (movie_id, person_id) VALUES ($1, $2) \
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(movie_id)
+        .bind(person_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+/// Replaces the movie's director credit; an empty name just removes it.
+async fn replace_director(
+    conn: &mut PgConnection,
+    movie_id: i64,
+    name: &str,
+) -> Result<(), MovieError> {
+    sqlx::query("DELETE FROM movie_crew WHERE movie_id = $1 AND job ILIKE 'director'")
+        .bind(movie_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    let name = name.trim();
+    if name.is_empty() {
+        return Ok(());
+    }
+
+    let person_id = find_or_create_person(conn, name).await?;
+    sqlx::query(
+        "INSERT INTO movie_crew (credit_id, movie_id, person_id, department, job) \
+         VALUES ($1, $2, $3, 'Directing', 'Director') \
+         ON CONFLICT (credit_id) DO UPDATE SET person_id = EXCLUDED.person_id",
+    )
+    .bind(format!("director-{movie_id}"))
+    .bind(movie_id)
+    .bind(person_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(db_error)?;
+
+    Ok(())
+}
+
+/// People have no natural key besides their TMDB id, so match by exact name and mint a new
+/// id for anyone not in the dataset yet.
+async fn find_or_create_person(conn: &mut PgConnection, name: &str) -> Result<i64, MovieError> {
+    let existing = sqlx::query_scalar::<_, i64>("SELECT id FROM people WHERE name = $1 LIMIT 1")
+        .bind(name)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(db_error)?;
+    if let Some(id) = existing {
+        return Ok(id);
+    }
+
+    // Serialise id allocation so two concurrent writes can't mint the same one.
+    sqlx::query("LOCK TABLE people IN SHARE ROW EXCLUSIVE MODE")
+        .execute(&mut *conn)
+        .await
+        .map_err(db_error)?;
+
+    sqlx::query_scalar::<_, i64>(
+        "INSERT INTO people (id, name, gender) \
+         VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM people), $1, 0) \
+         RETURNING id",
+    )
+    .bind(name)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(db_error)
 }
 
 fn db_error(error: sqlx::Error) -> MovieError {

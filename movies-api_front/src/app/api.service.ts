@@ -172,10 +172,11 @@ export interface MovieCreate {
   crew: never[];
 }
 
-/** Body of PATCH /movies/{id}: only scalar fields can change, absent ones are kept. */
-export type MoviePatch = Partial<Pick<MovieCreate,
-  'title' | 'original_title' | 'overview' | 'tagline' | 'director' | 'release_date' | 'runtime' | 'budget' |
-  'revenue' | 'vote_average' | 'vote_count' | 'popularity' | 'original_language' | 'homepage' | 'status'>>;
+/**
+ * Body of PATCH /movies/{id}: absent fields are kept. A list that is present replaces the movie's
+ * current one, and `director: ""` removes the director.
+ */
+export type MoviePatch = Partial<Omit<MovieCreate, 'crew'>>;
 
 export type RankingSort = 'movie_count' | 'rating' | 'revenue';
 export type RankingKind = 'directors' | 'actors' | 'companies';

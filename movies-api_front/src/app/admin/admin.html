@@ -1,0 +1,148 @@
+<app-site-nav [canCreate]="true" (create)="openEditor(null)" />
+
+<main class="admin shell">
+  @if (!api.username()) {
+    <section class="locked card">
+      <div class="locked-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      </div>
+      <h1>Gestión del catálogo</h1>
+      <p>Crear, editar y eliminar películas requiere una sesión de administrador.</p>
+      <a class="btn btn-primary" routerLink="/login">Iniciar sesión</a>
+    </section>
+  } @else {
+    <header class="admin-head">
+      <div>
+        <p class="eyebrow">Panel de administración</p>
+        <h1 class="section-title">Gestión del <span class="gradient-text">catálogo</span></h1>
+        <p class="section-lede">El CRUD completo sobre <code class="mono">/movies</code>: busca, crea, edita y elimina películas. Los cambios se reflejan al instante en el catálogo y en la analítica.</p>
+      </div>
+      <button class="btn btn-primary" (click)="openEditor(null)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
+        Nueva película
+      </button>
+    </header>
+
+    <div class="ops">
+      <div class="op"><span class="op-verb mono">POST</span><span>Crear</span></div>
+      <div class="op"><span class="op-verb mono get">GET</span><span>Listar y ver</span></div>
+      <div class="op"><span class="op-verb mono patch">PATCH</span><span>Editar</span></div>
+      <div class="op"><span class="op-verb mono del">DELETE</span><span>Eliminar</span></div>
+    </div>
+
+    <div class="toolbar card">
+      <label class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" placeholder="Buscar por título…" aria-label="Buscar por título" (input)="onSearch($any($event.target).value)" />
+      </label>
+      <select class="field" [value]="genre()" (change)="setGenre($any($event.target).value)" aria-label="Filtrar por género">
+        <option value="">Todos los géneros</option>
+        @for (g of genres; track g) { <option [value]="g">{{ genreLabel(g) }}</option> }
+      </select>
+      <span class="range mono">{{ loading() ? 'Cargando…' : rangeLabel() }}</span>
+    </div>
+
+    @if (error()) {
+      <div class="state card">
+        <p>{{ error() }}</p>
+        <button class="btn btn-sm" (click)="load()">Reintentar</button>
+      </div>
+    } @else {
+      <div class="table-wrap card" [class.busy]="loading()">
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="c-id">ID</th>
+              <th>Película</th>
+              <th class="c-genres">Géneros</th>
+              <th class="c-director">Director</th>
+              <th class="c-num">Rating</th>
+              <th class="c-num c-money">Presupuesto</th>
+              <th class="c-num c-money">Taquilla</th>
+              <th class="c-actions"><span class="sr-only">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (loading() && !rows().length) {
+              @for (i of [1,2,3,4,5,6]; track i) {
+                <tr class="skeleton-row"><td colspan="8"><div class="bone-fallback" style="height:44px"></div></td></tr>
+              }
+            }
+            @for (m of rows(); track m.id) {
+              <tr [class.flash]="flashId() === m.id">
+                <td class="c-id mono">#{{ m.id }}</td>
+                <td>
+                  <div class="title-cell">
+                    <span class="thumb" [style.background]="posterGradient(m.id)">
+                      @if (posters.posters()[m.id]; as url) { <img [src]="url" alt="" loading="lazy" (error)="posters.forget(m.id)" /> }
+                    </span>
+                    <span class="title-text">
+                      <strong>{{ m.title }}</strong>
+                      <small>{{ year(m.release_date) }}@if (m.original_title && m.original_title !== m.title) { · {{ m.original_title }} }</small>
+                    </span>
+                  </div>
+                </td>
+                <td class="c-genres"><span class="genres-text">{{ m.genres.map(genreLabel).join(', ') || '—' }}</span></td>
+                <td class="c-director">{{ m.director || '—' }}</td>
+                <td class="c-num mono">{{ m.vote_count ? '★ ' + rating(m.vote_average) : '—' }}</td>
+                <td class="c-num c-money mono">{{ money(m.budget) }}</td>
+                <td class="c-num c-money mono">{{ money(m.revenue) }}</td>
+                <td class="c-actions">
+                  <div class="actions">
+                    <a class="act" routerLink="/" [queryParams]="{ movie: m.id }" title="Ver en el catálogo" [attr.aria-label]="'Ver ' + m.title">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </a>
+                    <button class="act" (click)="openEditor(m)" title="Editar" [attr.aria-label]="'Editar ' + m.title">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    </button>
+                    <button class="act danger" (click)="askDelete(m)" title="Eliminar" [attr.aria-label]="'Eliminar ' + m.title">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            } @empty {
+              @if (!loading()) {
+                <tr><td colspan="8" class="empty">Ninguna película coincide con la búsqueda.</td></tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <nav class="pager" aria-label="Paginación">
+        <button class="btn btn-sm" (click)="goTo(page() - 1)" [disabled]="page() === 1 || loading()">← Anterior</button>
+        <span class="mono">Página {{ page() }}{{ totalPages() !== null ? ' de ' + totalPages()!.toLocaleString('es') : '' }}</span>
+        <button class="btn btn-sm" (click)="goTo(page() + 1)" [disabled]="loading() || (totalPages() !== null ? page() >= totalPages()! : !hasNext())">Siguiente →</button>
+      </nav>
+    }
+  }
+</main>
+
+<app-site-footer />
+
+@if (editorOpen()) {
+  <app-movie-editor [movie]="editorMovie()" [countries]="countries()"
+    (saved)="onSaved($event)" (deleted)="onEditorDeleted($event)" (closed)="closeEditor()" />
+}
+
+@if (pendingDelete(); as m) {
+  <div class="dialog-backdrop" (click)="cancelDelete()">
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-desc" (click)="$event.stopPropagation()">
+      <div class="dialog-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>
+      </div>
+      <h2 id="delete-title">¿Eliminar “{{ m.title }}”?</h2>
+      <p id="delete-desc">Se borrará la película <span class="mono">#{{ m.id }}</span> junto con sus géneros, reparto, palabras clave y demás relaciones. Esta acción no se puede deshacer.</p>
+      @if (deleteError()) { <div class="dialog-error" role="alert">{{ deleteError() }}</div> }
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" (click)="cancelDelete()" [disabled]="deleting()">Cancelar</button>
+        <button class="btn btn-delete" (click)="confirmDelete()" [disabled]="deleting()">{{ deleting() ? 'Eliminando…' : 'Sí, eliminar' }}</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.bad]="t.kind === 'bad'" role="status"><span class="toast-dot"></span>{{ t.text }}</div>
+}

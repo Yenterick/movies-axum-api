@@ -1,0 +1,41 @@
+<nav class="nav" [class.scrolled]="scrolled() || menuOpen()">
+  <div class="shell nav-inner">
+    <a class="brand" routerLink="/" (click)="top()">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="6.8" r="1.6"/><circle cx="12" cy="17.2" r="1.6"/><circle cx="6.8" cy="12" r="1.6"/><circle cx="17.2" cy="12" r="1.6"/></svg>
+      </span>
+      <span>Cine<span class="gradient-text">Data</span></span>
+    </a>
+
+    <div class="nav-links" [class.open]="menuOpen()">
+      <button (click)="go('analytics')">Analítica</button>
+      <button (click)="go('catalog')">Catálogo</button>
+      @if (api.username()) {
+        <a routerLink="/gestion" routerLinkActive="active" (click)="menuOpen.set(false)">Gestión</a>
+      }
+      <a routerLink="/sobre-nosotros" routerLinkActive="active" (click)="menuOpen.set(false)">Sobre nosotros</a>
+    </div>
+
+    <div class="nav-actions">
+      @if (api.username(); as user) {
+        @if (canCreate) {
+          <button class="btn btn-sm btn-primary" (click)="create.emit()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>
+            <span class="hide-sm">Nueva película</span>
+          </button>
+        }
+        <span class="user-pill" title="Sesión de administrador"><span class="user-dot">{{ user.charAt(0).toUpperCase() }}</span>{{ user }}</span>
+        <button class="btn btn-sm" (click)="logout()">Salir</button>
+      } @else {
+        <a class="btn btn-sm btn-primary" routerLink="/login">Iniciar sesión</a>
+      }
+      <button class="icon-btn menu-btn" (click)="menuOpen.set(!menuOpen())" [attr.aria-expanded]="menuOpen()" aria-label="Menú">
+        @if (menuOpen()) {
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        } @else {
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        }
+      </button>
+    </div>
+  </div>
+</nav>

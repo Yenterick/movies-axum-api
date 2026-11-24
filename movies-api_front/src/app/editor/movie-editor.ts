@@ -4,7 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   ApiService, CountryStats, GENRES, Movie, MovieCreate, MoviePatch, MovieStatus, genreLabel,
 } from '../api.service';
-import { LANGUAGES } from '../format';
+import { LANGUAGES, countryName } from '../format';
 
 interface Draft {
   title: string;
@@ -30,13 +30,16 @@ interface Draft {
 }
 
 const SCALARS = [
-  'title', 'original_title', 'tagline', 'overview', 'release_date', 'runtime', 'budget', 'revenue',
-  'vote_average', 'vote_count', 'popularity', 'original_language', 'homepage', 'status',
+  'title', 'original_title', 'tagline', 'overview', 'director', 'release_date', 'runtime', 'budget',
+  'revenue', 'vote_average', 'vote_count', 'popularity', 'original_language', 'homepage', 'status',
 ] as const;
 
+const list = (s: string) => [...new Set(s.split(',').map((x) => x.trim()).filter(Boolean))];
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
 /**
- * Admin drawer for POST /movies and PATCH /movies/{id}. The PATCH endpoint only accepts scalar
- * fields, so genres, keywords, cast, countries and studios are editable on creation only.
+ * Admin drawer for POST /movies and PATCH /movies/{id}. Every field is editable in both modes;
+ * on edit only what changed is sent, and a changed list replaces the stored one.
  */
 @Component({
   selector: 'app-movie-editor',
@@ -58,6 +61,7 @@ export class MovieEditor implements OnInit {
   readonly genres = GENRES;
   readonly languages = LANGUAGES;
   readonly genreLabel = genreLabel;
+  readonly countryName = countryName;
   readonly statuses: { value: MovieStatus; label: string }[] = [
     { value: 'Released', label: 'Estrenada' },
     { value: 'PostProduction', label: 'Postproducción' },
@@ -99,6 +103,12 @@ export class MovieEditor implements OnInit {
       companies: m?.production_companies.map((c) => c.name).join(', ') ?? '',
     };
     this.original = structuredClone(this.draft);
+  }
+
+  /** Known countries plus any the movie already has, so editing never hides a selected one. */
+  get countryOptions(): { iso_3166_1: string; name: string }[] {
+    const own = this.movie?.production_countries ?? [];
+    return [...this.countries, ...own.filter((c) => !this.countries.some((k) => k.iso_3166_1 === c.iso_3166_1))];
   }
 
   knownLanguage(): boolean {
@@ -156,7 +166,7 @@ export class MovieEditor implements OnInit {
   private validate(): string {
     const d = this.draft;
     if (!d.title.trim()) return 'El título es obligatorio.';
-    if (!this.isEdit && !d.genres.length) return 'Elige al menos un género.';
+    if (!d.genres.length) return 'Elige al menos un género.';
     if (d.vote_average !== null && (d.vote_average < 0 || d.vote_average > 10)) return 'El rating va de 0 a 10.';
     for (const key of ['runtime', 'budget', 'revenue', 'vote_count', 'popularity'] as const) {
       const v = d[key];
@@ -173,12 +183,34 @@ export class MovieEditor implements OnInit {
       const now = this.draft[key];
       if (now !== this.original[key]) patch[key] = this.normalize(key, now);
     }
+    const d = this.draft;
+    const o = this.original;
+    if (!sameSet(d.genres, o.genres)) patch['genres'] = d.genres;
+    if (!sameSet(list(d.keywords), list(o.keywords))) patch['keywords'] = list(d.keywords);
+    if (!sameSet(list(d.cast), list(o.cast))) patch['cast'] = list(d.cast);
+    if (!sameSet(list(d.companies), list(o.companies))) patch['production_companies'] = this.companies();
+    if (!sameSet(d.countries, o.countries)) patch['production_countries'] = this.selectedCountries();
     return patch as MoviePatch;
+  }
+
+  private selectedCountries(): { iso_3166_1: string; name: string }[] {
+    return this.draft.countries.map((iso) => ({
+      iso_3166_1: iso,
+      name: this.countryOptions.find((c) => c.iso_3166_1 === iso)?.name ?? iso,
+    }));
+  }
+
+  /** Studios need an id: reuse the stored one for studios the movie already had, derive the rest from the name. */
+  private companies(): { id: number; name: string }[] {
+    const own = this.movie?.production_companies ?? [];
+    return list(this.draft.companies).map((name) => ({
+      id: own.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id ?? this.stableId(name),
+      name,
+    }));
   }
 
   private createBody(): MovieCreate {
     const d = this.draft;
-    const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
     const languageName = this.languages.find((l) => l.code === d.original_language)?.english ?? d.original_language;
     return {
       title: d.title.trim(),
@@ -199,12 +231,8 @@ export class MovieEditor implements OnInit {
       genres: d.genres,
       keywords: list(d.keywords),
       cast: list(d.cast),
-      production_countries: d.countries.map((iso) => ({
-        iso_3166_1: iso,
-        name: this.countries.find((c) => c.iso_3166_1 === iso)?.name ?? iso,
-      })),
-      // Studios need an id; derive a stable one from the name so the same studio maps to the same row.
-      production_companies: list(d.companies).map((name) => ({ id: this.stableId(name), name })),
+      production_countries: this.selectedCountries(),
+      production_companies: this.companies(),
       spoken_languages: [{ iso_639_1: d.original_language, name: languageName }],
       crew: [],
     };
