@@ -42,6 +42,19 @@ export function flag(iso: string): string {
   return String.fromCodePoint(...[...iso.toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0)));
 }
 
+const regionNames = typeof Intl !== 'undefined' && 'DisplayNames' in Intl
+  ? new Intl.DisplayNames(['es'], { type: 'region' }) : null;
+
+/** Spanish name for an ISO 3166-1 code; the dataset stores English names. */
+export function countryName(iso: string, fallback: string): string {
+  try {
+    const name = regionNames?.of(iso.toUpperCase());
+    return name && name !== iso.toUpperCase() ? name : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /** Deterministic gradient for posterless cards, so each title keeps its own colour. */
 export function posterGradient(seed: number): string {
   const hue = (seed * 47) % 360;

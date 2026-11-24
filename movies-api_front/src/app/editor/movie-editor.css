@@ -24,8 +24,6 @@ input[type=date].field { color-scheme: dark; }
 .chip-sm { height: 28px; padding: 0 11px; font-size: 12px; }
 .country-chips { max-height: 140px; overflow-y: auto; }
 
-.note { margin: 18px 0 0; padding: 14px 16px; border: 1px dashed var(--line-strong); border-radius: 12px; color: var(--ink-3); font-size: 13px; line-height: 1.55; }
-.note code { color: var(--ink-2); font-size: 12px; }
 .alert { margin-top: 16px; padding: 11px 14px; border: 1px solid rgba(255, 107, 125, .4); border-radius: 12px; background: rgba(255, 107, 125, .1); color: #ffc2ca; font-size: 13px; animation: fade .2s both; }
 
 .drawer-foot { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; margin: 18px -28px 0; padding: 16px 28px; border-top: 1px solid var(--line); background: var(--panel-solid); }

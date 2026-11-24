@@ -21,7 +21,9 @@ async fn main() {
         return;
     }
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Server starting on 0.0.0.0:3000!");
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let address = format!("0.0.0.0:{port}");
+    let listener = tokio::net::TcpListener::bind(&address).await.unwrap();
+    println!("Server starting on {address}!");
     axum::serve(listener, app::run().await).await.unwrap();
 }

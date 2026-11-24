@@ -46,33 +46,29 @@
       <label class="f"><span>Popularidad</span><input class="field" type="number" min="0" step="0.1" name="popularity" [(ngModel)]="draft.popularity" /></label>
     </section>
 
-    @if (!isEdit) {
-      <section class="group">
-        <h3>Clasificación y créditos</h3>
-        <div class="f full">
-          <span>Géneros *</span>
-          <div class="chips">
-            @for (g of genres; track g) {
-              <button type="button" class="chip chip-sm" [class.active]="draft.genres.includes(g)" (click)="toggleGenre(g)">{{ genreLabel(g) }}</button>
-            }
-          </div>
+    <section class="group">
+      <h3>Clasificación y créditos</h3>
+      <div class="f full">
+        <span>Géneros *</span>
+        <div class="chips">
+          @for (g of genres; track g) {
+            <button type="button" class="chip chip-sm" [class.active]="draft.genres.includes(g)" (click)="toggleGenre(g)">{{ genreLabel(g) }}</button>
+          }
         </div>
-        <label class="f full"><span>Director</span><input class="field" name="director" [(ngModel)]="draft.director" /></label>
-        <label class="f full"><span>Reparto <small>separado por comas</small></span><input class="field" name="cast" [(ngModel)]="draft.cast" placeholder="Actriz Uno, Actor Dos" /></label>
-        <label class="f full"><span>Palabras clave <small>separadas por comas</small></span><input class="field" name="keywords" [(ngModel)]="draft.keywords" placeholder="space, heist" /></label>
-        <label class="f full"><span>Estudios <small>separados por comas</small></span><input class="field" name="companies" [(ngModel)]="draft.companies" /></label>
-        <div class="f full">
-          <span>Países de producción</span>
-          <div class="chips country-chips">
-            @for (c of countries; track c.iso_3166_1) {
-              <button type="button" class="chip chip-sm" [class.active]="draft.countries.includes(c.iso_3166_1)" (click)="toggleCountry(c.iso_3166_1)">{{ c.iso_3166_1 }} · {{ c.name }}</button>
-            }
-          </div>
+      </div>
+      <label class="f full"><span>Director</span><input class="field" name="director" [(ngModel)]="draft.director" /></label>
+      <label class="f full"><span>Reparto <small>separado por comas</small></span><input class="field" name="cast" [(ngModel)]="draft.cast" placeholder="Actriz Uno, Actor Dos" /></label>
+      <label class="f full"><span>Palabras clave <small>separadas por comas</small></span><input class="field" name="keywords" [(ngModel)]="draft.keywords" placeholder="space, heist" /></label>
+      <label class="f full"><span>Estudios <small>separados por comas</small></span><input class="field" name="companies" [(ngModel)]="draft.companies" /></label>
+      <div class="f full">
+        <span>Países de producción</span>
+        <div class="chips country-chips">
+          @for (c of countryOptions; track c.iso_3166_1) {
+            <button type="button" class="chip chip-sm" [class.active]="draft.countries.includes(c.iso_3166_1)" (click)="toggleCountry(c.iso_3166_1)">{{ c.iso_3166_1 }} · {{ countryName(c.iso_3166_1, c.name) }}</button>
+          }
         </div>
-      </section>
-    } @else {
-      <p class="note">Géneros, reparto, director, palabras clave, estudios y países no se pueden modificar con <code class="mono">PATCH /movies/{{ '{' }}id{{ '}' }}</code>; solo se definen al crear la película.</p>
-    }
+      </div>
+    </section>
 
     @if (error()) { <div class="alert" role="alert">{{ error() }}</div> }
 
