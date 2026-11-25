@@ -26,6 +26,16 @@ services:
       db:
         condition: service_healthy
 
+  frontend:
+    build: ./movies-api_front
+    image: movies-api-front
+    environment:
+      NG_ALLOWED_HOSTS: localhost
+    ports:
+      - "4000:4000"
+    depends_on:
+      - api
+
   seed:
     image: movies-axum-api
     env_file:

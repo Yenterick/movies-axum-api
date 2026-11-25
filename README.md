@@ -28,7 +28,7 @@
    ```bash
    cp .env.example .env
    ```
-2. Start PostgreSQL and the API (migrations run automatically on startup):
+2. Start PostgreSQL, the API and the frontend (migrations run automatically on startup):
    ```bash
    docker compose up --build
    ```
@@ -37,6 +37,7 @@
    docker compose run --rm seed
    ```
 
+> The frontend is served at `http://localhost:4000`.
 > The API is served at `http://localhost:3000/api/v1`.
 > Interactive Swagger docs live at `/api/v1/docs`.
 
@@ -124,7 +125,7 @@ GET /api/v1/analytics/movies/most-profitable?sort_by=roi&genre=Horror&limit=5
 
 ## Frontend
 
-The Angular app in `movies-api_front/` (`npm install && npm start`, served at `http://localhost:4200`) has:
+The Angular app in `movies-api_front/` runs as the `frontend` service in Docker Compose (`http://localhost:4000`). For local development, run `npm install && npm start` inside `movies-api_front/` (served at `http://localhost:4200`). It has:
 
 - **`/`**: catalogue with search and filters, plus a live analytics dashboard told as a six-chapter story; every chart carries a data-driven takeaway that updates with the selected metric.
 - **`/gestion`**: admin console with the full CRUD (list, create, edit, delete) over `/movies`. Requires login.
