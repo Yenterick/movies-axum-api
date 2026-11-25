@@ -13,7 +13,6 @@ interface Member {
 const TEAM: Member[] = [
   { name: 'Juan David Martínez', github: 'Yenterick' },
   { name: 'Faider Asprilla Torres', github: 'Faiderasp' },
-  { name: 'Juan Alberto Trujillo Herrera', github: 'Beto874874' },
   { name: 'Tomás Salazar Vélez', github: 'TomasSalav' },
 ];
 

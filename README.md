@@ -263,5 +263,4 @@ This project is licensed under the [MIT License](./LICENSE).
 
 * [Yenterick](https://github.com/Yenterick)
 * [Faiderasp](https://github.com/Faiderasp)
-* [Beto874874](https://github.com/Beto874874)
 * [TomasSalav](https://github.com/TomasSalav)
